@@ -11,6 +11,7 @@ services:
     volumes:
       - ./workspace:/app/workspace
       - mtzcode-data:/root/.local/share/mtzcode
+      - mtzcode-config:/root/.mtzcode
     # Se a Evolution roda em outro container na mesma máquina:
     # extra_hosts:
     #   - "host.docker.internal:host-gateway"
@@ -23,3 +24,4 @@ services:
 
 volumes:
   mtzcode-data:
+  mtzcode-config:

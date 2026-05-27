@@ -1223,9 +1223,13 @@ def create_app() -> FastAPI:
     if os.environ.get("EVOLUTION_BASE_URL") and os.environ.get("EVOLUTION_API_KEY"):
         try:
             from mtzcode.whatsapp import SessionManager, setup_webhook
+            # Registry separada da web Session — a Session do web monkey-patcha
+            # .get/.schemas pra honrar a lista de tools desabilitadas via UI,
+            # e esse estado não deve vazar pras conversas do WhatsApp.
+            wa_registry = default_registry()
             wa_manager = SessionManager(
                 cfg=session.cfg,
-                registry=session.registry,
+                registry=wa_registry,
                 system_prompt=session.cfg.system_prompt(),
             )
             setup_webhook(app, wa_manager)

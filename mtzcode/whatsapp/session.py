@@ -18,11 +18,18 @@ from mtzcode.agent import Agent
 from mtzcode.client import make_client
 from mtzcode.config import Config
 from mtzcode.tools.base import ToolRegistry
+from mtzcode.whatsapp.evolution import _strip_jid
 
 
-def _digits(jid: str) -> str:
-    n = (jid or "").split("@")[0]
-    return "".join(ch for ch in n if ch.isdigit()) or "anon"
+def _key_for(jid: str) -> str:
+    """Chave de cache: só dígitos, ou 'anon' se vazio."""
+    return _strip_jid(jid) or "anon"
+
+
+def _env_truthy(name: str, default: str = "false") -> bool:
+    return os.environ.get(name, default).strip().lower() in (
+        "1", "true", "yes", "sim", "on",
+    )
 
 
 @dataclass
@@ -32,6 +39,8 @@ class Session:
     client: Any
     workspace: Path
     last_seen: float = field(default_factory=time.time)
+    # Lock por sessão — Agent.run() mexe em self.history e não é reentrante.
+    lock: threading.Lock = field(default_factory=threading.Lock)
 
     def touch(self) -> None:
         self.last_seen = time.time()
@@ -62,9 +71,7 @@ class SessionManager:
         self.workspace_root.mkdir(parents=True, exist_ok=True)
         # Auto-confirm de tools destrutivas. False = denied (default seguro).
         if auto_confirm is None:
-            auto_confirm = os.environ.get("WHATSAPP_AUTO_CONFIRM", "false").lower() in (
-                "1", "true", "yes", "sim",
-            )
+            auto_confirm = _env_truthy("WHATSAPP_AUTO_CONFIRM")
         self.auto_confirm = bool(auto_confirm)
         self._sessions: dict[str, Session] = {}
         self._lock = threading.Lock()
@@ -72,8 +79,12 @@ class SessionManager:
     def _confirm_cb(self, _name: str, _args: dict[str, Any]) -> bool:
         return self.auto_confirm
 
+    def active_count(self) -> int:
+        with self._lock:
+            return len(self._sessions)
+
     def get(self, jid: str) -> Session:
-        key = _digits(jid)
+        key = _key_for(jid)
         with self._lock:
             sess = self._sessions.get(key)
             now = time.time()
@@ -81,11 +92,15 @@ class SessionManager:
                 sess.touch()
                 return sess
             if sess:
-                self._evict(key)
+                self._drop(key)
             if len(self._sessions) >= self.max_sessions:
-                # Evict o mais antigo
-                oldest = min(self._sessions, key=lambda k: self._sessions[k].last_seen)
-                self._evict(oldest)
+                # Evict o mais antigo. NÃO fechamos o httpx client porque
+                # outro thread pode estar com request in-flight; GC fecha
+                # quando refcount = 0.
+                oldest = min(
+                    self._sessions, key=lambda k: self._sessions[k].last_seen
+                )
+                self._drop(oldest)
 
             workspace = self.workspace_root / key
             workspace.mkdir(parents=True, exist_ok=True)
@@ -102,19 +117,22 @@ class SessionManager:
             return sess
 
     def reset(self, jid: str) -> None:
-        key = _digits(jid)
+        key = _key_for(jid)
         with self._lock:
-            self._evict(key)
+            self._drop(key)
 
-    def _evict(self, key: str) -> None:
-        sess = self._sessions.pop(key, None)
-        if sess is not None:
-            try:
-                sess.client.close()
-            except Exception:
-                pass
+    def _drop(self, key: str) -> None:
+        """Remove a sessão do cache. NÃO fecha o httpx client — pode haver
+        request in-flight; deixa o GC fechar quando refs caírem a zero.
+        """
+        self._sessions.pop(key, None)
 
     def shutdown(self) -> None:
         with self._lock:
-            for key in list(self._sessions):
-                self._evict(key)
+            # No shutdown geral é seguro fechar — não há mais requests novos.
+            for sess in self._sessions.values():
+                try:
+                    sess.client.close()
+                except Exception:
+                    pass
+            self._sessions.clear()

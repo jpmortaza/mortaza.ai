@@ -20,13 +20,16 @@ from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Request
 
-from mtzcode.whatsapp.evolution import EvolutionClient, EvolutionError
-from mtzcode.whatsapp.session import SessionManager, _digits
+from mtzcode.whatsapp.evolution import EvolutionClient, EvolutionError, _strip_jid
 
 
 log = logging.getLogger("mtzcode.whatsapp")
 
 router = APIRouter(prefix="/whatsapp", tags=["whatsapp"])
+
+# Strong-ref pra tasks em background — sem isso o GC pode coletá-las
+# no meio do processamento e o agente nunca termina.
+_BG_TASKS: set[asyncio.Task] = set()
 
 
 # --------------------------------------------------------------------- setup
@@ -37,7 +40,7 @@ def setup(app, session_manager: SessionManager) -> None:
     app.state.wa_webhook_secret = os.environ.get("WHATSAPP_WEBHOOK_SECRET", "")
     allowed = os.environ.get("WHATSAPP_ALLOWED_NUMBERS", "").strip()
     app.state.wa_allowed = {
-        _digits(n) for n in allowed.split(",") if n.strip()
+        _strip_jid(n) for n in allowed.split(",") if n.strip()
     } if allowed else None
     app.include_router(router)
 
@@ -51,7 +54,7 @@ async def health(request: Request) -> dict[str, Any]:
         "ok": True,
         "evolution_instance": ev.instance,
         "evolution_base_url": ev.base_url,
-        "active_sessions": len(sm._sessions),
+        "active_sessions": sm.active_count(),
         "allowed_numbers_configured": request.app.state.wa_allowed is not None,
         "auto_confirm": sm.auto_confirm,
         "profile": sm.cfg.profile.name,
@@ -67,7 +70,7 @@ async def send_manual(request: Request, payload: dict[str, Any]) -> dict[str, An
         raise HTTPException(400, "campos 'number' e 'text' são obrigatórios")
     ev: EvolutionClient = request.app.state.wa_evolution
     try:
-        result = ev.send_text(number, text)
+        result = await asyncio.to_thread(ev.send_text, number, text)
     except EvolutionError as exc:
         raise HTTPException(502, str(exc))
     return {"ok": True, "result": result}
@@ -101,12 +104,14 @@ async def webhook(
 
     jid, text, push_name = parsed
     allowed = request.app.state.wa_allowed
-    if allowed is not None and _digits(jid) not in allowed:
+    if allowed is not None and _strip_jid(jid) not in allowed:
         log.info("whatsapp: número não autorizado: %s", jid)
         return {"ok": True, "ignored": "not_allowed"}
 
     # Processa em background — evita timeout do webhook.
-    asyncio.create_task(_handle_message(request.app, jid, text, push_name))
+    task = asyncio.create_task(_handle_message(request.app, jid, text, push_name))
+    _BG_TASKS.add(task)
+    task.add_done_callback(_BG_TASKS.discard)
     return {"ok": True, "queued": True}
 
 
@@ -172,14 +177,16 @@ async def _handle_message(app, jid: str, text: str, push_name: str) -> None:
     sess = sm.get(jid)
     # Mostra "digitando…" pra dar feedback antes da resposta.
     try:
-        ev.send_typing(jid, duration_ms=2500)
+        await asyncio.to_thread(ev.send_typing, jid, 2500)
     except Exception:
         pass
 
     user_msg = text if not push_name else f"[{push_name}] {text}"
 
+    # Serializa por sessão — Agent.run mexe em self.history e não é reentrante.
+    # Duas mensagens consecutivas do mesmo jid esperam uma pela outra.
     try:
-        reply_text = await asyncio.to_thread(_run_agent, sess, user_msg)
+        reply_text = await asyncio.to_thread(_run_agent_locked, sess, user_msg)
     except Exception as exc:
         log.exception("erro processando mensagem WhatsApp")
         reply_text = f"⚠️ erro interno: {exc}"
@@ -191,9 +198,10 @@ async def _handle_message(app, jid: str, text: str, push_name: str) -> None:
         await _safe_send(ev, jid, chunk)
 
 
-def _run_agent(sess, user_message: str) -> str:
-    """Executa o loop síncrono do agente e devolve a resposta final em texto."""
-    return sess.agent.run(user_message)
+def _run_agent_locked(sess, user_message: str) -> str:
+    """Executa o loop síncrono do agente sob lock da sessão."""
+    with sess.lock:
+        return sess.agent.run(user_message)
 
 
 async def _safe_send(ev: EvolutionClient, jid: str, text: str) -> None:
@@ -204,11 +212,22 @@ async def _safe_send(ev: EvolutionClient, jid: str, text: str) -> None:
 
 
 def _chunk(text: str, size: int) -> list[str]:
+    """Split em chunks <= size, preferindo quebras de linha mas forçando
+    corte duro pra linhas individuais que excedem o limite (URL longa,
+    base64, código sem newlines, etc).
+    """
     if len(text) <= size:
         return [text]
     out: list[str] = []
     cur = ""
     for line in text.split("\n"):
+        # Linha sozinha já passa do limite — emite o que tinha e corta a linha.
+        while len(line) > size:
+            if cur:
+                out.append(cur)
+                cur = ""
+            out.append(line[:size])
+            line = line[size:]
         if len(cur) + len(line) + 1 > size and cur:
             out.append(cur)
             cur = line

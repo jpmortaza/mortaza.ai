@@ -64,29 +64,53 @@ class AnthropicClient:
         )
 
     # ------------------------------------------------------------------ chat
-    def chat(
+    def _build_payload(
         self,
         messages: list[dict[str, Any]],
-        tools: Iterable[dict[str, Any]] | None = None,
-    ) -> dict[str, Any]:
+        tools: Iterable[dict[str, Any]] | None,
+        stream: bool,
+    ) -> tuple[dict[str, Any], str, list[dict[str, Any]]]:
         system, anth_messages = _to_anthropic_messages(messages)
         payload: dict[str, Any] = {
             "model": self.model,
             "messages": anth_messages,
             "max_tokens": int(os.environ.get("MTZCODE_MAX_TOKENS", "4096")),
         }
+        if stream:
+            payload["stream"] = True
         if system:
             payload["system"] = system
         if tools:
             payload["tools"] = _to_anthropic_tools(tools)
+        # Honra temperature/top_p das Settings (web UI), igual ao ChatClient.
+        try:
+            from mtzcode.settings import get_settings
+            opts = get_settings().model_options
+            payload["temperature"] = float(opts.temperature)
+            payload["top_p"] = float(opts.top_p)
+        except Exception:
+            pass
+        return payload, system, anth_messages
 
+    def chat(
+        self,
+        messages: list[dict[str, Any]],
+        tools: Iterable[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        payload, _, _ = self._build_payload(messages, tools, stream=False)
         response = self._post_with_retry("/v1/messages", payload)
         if response.status_code != 200:
             raise ChatClientError(
-                f"{self.profile.label} respondeu {response.status_code}: "
-                f"{(response.text or '')[:500]}"
+                self._format_http_error(response.status_code, response.text or "")
             )
-        return _from_anthropic_response(response.json())
+        data = response.json()
+        content = data.get("content")
+        if not content:
+            raise ChatClientError(
+                f"{self.profile.label} devolveu resposta sem content: "
+                f"stop_reason={data.get('stop_reason')!r}"
+            )
+        return _from_anthropic_response(data)
 
     # --------------------------------------------------------------- stream
     def chat_stream(
@@ -95,17 +119,7 @@ class AnthropicClient:
         tools: Iterable[dict[str, Any]] | None = None,
     ) -> Iterator[dict[str, Any]]:
         """Emite chunks no formato OpenAI streaming: choices[0].delta."""
-        system, anth_messages = _to_anthropic_messages(messages)
-        payload: dict[str, Any] = {
-            "model": self.model,
-            "messages": anth_messages,
-            "max_tokens": int(os.environ.get("MTZCODE_MAX_TOKENS", "4096")),
-            "stream": True,
-        }
-        if system:
-            payload["system"] = system
-        if tools:
-            payload["tools"] = _to_anthropic_tools(tools)
+        payload, _, _ = self._build_payload(messages, tools, stream=True)
 
         try:
             with self._client.stream("POST", "/v1/messages", json=payload) as resp:
@@ -115,8 +129,7 @@ class AnthropicClient:
                     except Exception:
                         body = "<erro lendo body>"
                     raise ChatClientError(
-                        f"{self.profile.label} respondeu {resp.status_code}: "
-                        f"{body[:500]}"
+                        self._format_http_error(resp.status_code, body)
                     )
                 yield from _stream_anthropic_to_openai(resp.iter_lines())
         except httpx.HTTPError as exc:
@@ -147,6 +160,38 @@ class AnthropicClient:
             f"falha ao conectar em {self.profile.base_url} após "
             f"{self._max_retries + 1} tentativa(s): {last_exc}"
         ) from last_exc
+
+    def _format_http_error(self, status: int, body: str) -> str:
+        """Mensagens amigáveis pros erros mais comuns da Anthropic."""
+        snippet = (body or "")[:500]
+        low = snippet.lower()
+        if status == 401:
+            return (
+                f"{self.profile.label}: chave inválida. Confira a "
+                f"variável de ambiente ANTHROPIC_API_KEY."
+            )
+        if status == 404 and ("model" in low or "not_found" in low):
+            return (
+                f"{self.profile.label}: o modelo '{self.model}' não existe ou "
+                f"não está disponível pra sua chave. Confira o nome do modelo "
+                f"em profiles.py ou troque de profile."
+            )
+        if status == 400 and "tools" in low:
+            return (
+                f"{self.profile.label}: payload de tools rejeitado. "
+                f"Detalhe: {snippet}"
+            )
+        if status == 429:
+            return (
+                f"{self.profile.label}: rate limit atingido. Tente de novo "
+                f"em alguns segundos. Detalhe: {snippet}"
+            )
+        if status == 529:
+            return (
+                f"{self.profile.label}: API sobrecarregada (overload). "
+                f"Detalhe: {snippet}"
+            )
+        return f"{self.profile.label} respondeu {status}: {snippet}"
 
     def close(self) -> None:
         self._client.close()
@@ -186,6 +231,9 @@ def _to_anthropic_messages(
     system_parts: list[str] = []
     out: list[dict[str, Any]] = []
     pending_tool_results: list[dict[str, Any]] = []
+    # Contador pra desambiguar tool_use ids quando o input vier sem id
+    # (ex: histórico do fallback parser do agent que sintetiza tool_calls).
+    synth_counter = 0
 
     def _flush_tool_results():
         if pending_tool_results:
@@ -224,10 +272,14 @@ def _to_anthropic_messages(
                         args = json.loads(args) if args.strip() else {}
                     except json.JSONDecodeError:
                         args = {"_raw": args}
+                tc_id = tc.get("id")
+                if not tc_id:
+                    synth_counter += 1
+                    tc_id = f"call_{fn.get('name', 'x')}_{synth_counter}"
                 blocks.append(
                     {
                         "type": "tool_use",
-                        "id": tc.get("id") or f"call_{fn.get('name', 'x')}",
+                        "id": tc_id,
                         "name": fn.get("name") or "unknown",
                         "input": args or {},
                     }
@@ -236,7 +288,41 @@ def _to_anthropic_messages(
                 blocks = [{"type": "text", "text": ""}]
             out.append({"role": "assistant", "content": blocks})
     _flush_tool_results()
-    return "\n\n".join(system_parts), out
+    return "\n\n".join(system_parts), _coalesce_same_role(out)
+
+
+def _coalesce_same_role(
+    msgs: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Anthropic exige roles alternados. Funde mensagens consecutivas do
+    mesmo role (acontece quando o agent.py insere _RECOVERY_HINT user logo
+    após outra user message, ou quando tool_result user é seguido por user
+    real).
+    """
+    out: list[dict[str, Any]] = []
+    for m in msgs:
+        if out and out[-1].get("role") == m.get("role"):
+            prev = out[-1]
+            prev["content"] = _merge_content(prev.get("content"), m.get("content"))
+        else:
+            out.append(dict(m))
+    return out
+
+
+def _merge_content(a: Any, b: Any) -> Any:
+    """Une dois 'content' de mensagens consecutivas do mesmo role.
+    Se ambos forem strings, concatena com \\n\\n. Se algum for lista (blocks),
+    converte ambos pra lista e concatena.
+    """
+    if isinstance(a, str) and isinstance(b, str):
+        if not a:
+            return b
+        if not b:
+            return a
+        return f"{a}\n\n{b}"
+    la = a if isinstance(a, list) else [{"type": "text", "text": str(a)}] if a else []
+    lb = b if isinstance(b, list) else [{"type": "text", "text": str(b)}] if b else []
+    return la + lb
 
 
 def _coerce_text(content: Any) -> str:
