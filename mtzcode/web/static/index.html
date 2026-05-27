@@ -1,0 +1,2930 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mtzCode — assistente local</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/styles/github-dark.min.css">
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/highlight.min.js"></script>
+<style>
+  :root {
+    --bg:         #0a0a0b;
+    --bg-elev:    #131316;
+    --bg-elev-2:  #1a1a1d;
+    --bg-elev-3:  #232327;
+    --border:     #2a2a2e;
+    --border-2:   #34343a;
+    --text:       #e5e5e7;
+    --text-dim:   #9a9aa0;
+    --text-mute:  #6a6a70;
+    --accent:     #d97757;
+    --accent-dim: #7a3e2a;
+    --cyan:       #6ec1e4;
+    --magenta:    #c87ad9;
+    --green:      #7ece7e;
+    --red:        #e47777;
+    --yellow:     #e4c76e;
+    --mono:       'SF Mono', 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+    --sidebar-w:  260px;
+    --panel-w:    300px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    overflow: hidden;
+  }
+  button { font-family: inherit; }
+  kbd {
+    background: var(--bg-elev-3);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+
+  /* ---------- Layout 3 colunas ---------- */
+  .app {
+    display: grid;
+    grid-template-columns: var(--sidebar-w) 1fr var(--panel-w);
+    height: 100vh;
+    transition: grid-template-columns 0.25s ease;
+  }
+  .app.collapse-left  { grid-template-columns: 0 1fr var(--panel-w); }
+  .app.collapse-right { grid-template-columns: var(--sidebar-w) 1fr 0; }
+  .app.collapse-left.collapse-right { grid-template-columns: 0 1fr 0; }
+
+  /* ---------- Sidebar esquerda ---------- */
+  aside.sidebar {
+    background: var(--bg-elev);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+  }
+  .sidebar-header {
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .logo {
+    font-family: var(--mono);
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: -0.5px;
+    flex: 1;
+  }
+  .logo .by { color: var(--text-mute); font-weight: 400; font-size: 10.5px; margin-left: 4px; display: block; }
+  .sidebar-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 8px 16px;
+  }
+  .new-chat-btn {
+    width: calc(100% - 16px);
+    margin: 10px 8px 14px;
+    background: var(--accent);
+    color: #1a0e08;
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.15s;
+  }
+  .new-chat-btn:hover { background: #e5876a; }
+
+  .section {
+    margin-top: 14px;
+  }
+  .section-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    color: var(--text-mute);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-weight: 600;
+  }
+  .section-title .add {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    color: var(--text-mute);
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+  .section-title .add:hover { background: var(--bg-elev-3); color: var(--accent); }
+
+  .item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    margin: 1px 0;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-dim);
+    font-size: 13px;
+    transition: background 0.12s;
+    position: relative;
+  }
+  .item:hover { background: var(--bg-elev-2); color: var(--text); }
+  .item.active { background: var(--bg-elev-3); color: var(--text); }
+  .item .radio {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border-2);
+    flex-shrink: 0;
+  }
+  .item.active .radio { border-color: var(--accent); background: var(--accent); box-shadow: inset 0 0 0 2px var(--bg-elev-3); }
+  .item .label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .item .sub {
+    display: block;
+    font-size: 11px;
+    color: var(--text-mute);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .item .x {
+    opacity: 0;
+    background: transparent;
+    border: none;
+    color: var(--text-mute);
+    cursor: pointer;
+    padding: 2px 5px;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+  .item:hover .x { opacity: 1; }
+  .item .x:hover { background: var(--red); color: white; }
+  .empty-list {
+    padding: 8px 12px;
+    font-size: 11.5px;
+    color: var(--text-mute);
+    font-style: italic;
+  }
+
+  /* ---------- Centro / Chat ---------- */
+  .center {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+    background: var(--bg);
+  }
+  .chat-header {
+    background: var(--bg-elev);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 50px;
+  }
+  .toggle-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+  }
+  .toggle-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+  .chip {
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 12px;
+    color: var(--text-dim);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s;
+  }
+  .chip:hover { border-color: var(--accent); color: var(--text); }
+  .chip strong { color: var(--text); font-weight: 600; }
+  .chip.cwd { font-family: var(--mono); font-size: 11.5px; max-width: 360px; }
+  .chip.cwd .path {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    direction: rtl;
+    text-align: left;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+  }
+  .badge.local { background: rgba(126, 206, 126, 0.15); color: var(--green); }
+  .badge.cloud { background: rgba(228, 119, 119, 0.15); color: var(--red); }
+  .badge.auto { background: rgba(200, 122, 217, 0.15); color: var(--magenta); animation: pulse 2s infinite; }
+  .badge.danger { background: rgba(228, 119, 119, 0.15); color: var(--red); }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+  }
+
+  .chat-header .spacer { flex: 1; }
+  .chat-header .icon-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 5px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .chat-header .icon-btn:hover { color: var(--accent); border-color: var(--accent); }
+  .chat-header .icon-btn.on { color: var(--magenta); border-color: var(--magenta); background: rgba(200, 122, 217, 0.08); }
+
+  main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 28px 20px 20px;
+  }
+  .chat {
+    max-width: 820px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+  .msg {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    animation: fadeIn 0.3s ease;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .msg .avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .msg.user .avatar { background: var(--bg-elev-3); color: var(--cyan); }
+  .msg.assistant .avatar { background: var(--accent-dim); color: var(--accent); }
+  .msg .content { flex: 1; min-width: 0; }
+  .msg .role {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+  .msg .body { font-size: 14px; line-height: 1.65; }
+  .msg .body p { margin: 8px 0; }
+  .msg .body p:first-child { margin-top: 0; }
+  .msg .body p:last-child { margin-bottom: 0; }
+  .msg .body code:not(pre code) {
+    background: var(--bg-elev-2);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--cyan);
+  }
+  .msg .body pre {
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    overflow-x: auto;
+    margin: 10px 0;
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+  .msg .body ul, .msg .body ol { margin: 8px 0 8px 22px; }
+  .msg .body h1, .msg .body h2, .msg .body h3 { margin: 14px 0 8px; }
+
+  /* Tool call card */
+  .tool {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--cyan);
+    border-radius: 6px;
+    margin: 8px 0;
+    font-family: var(--mono);
+    font-size: 12.5px;
+  }
+  .tool .head {
+    padding: 8px 12px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .tool .head .name { color: var(--cyan); font-weight: 600; }
+  .tool .head .args { color: var(--text-dim); font-size: 11.5px; }
+  .tool .head .chevron { margin-left: auto; transition: transform 0.2s; }
+  .tool.open .head .chevron { transform: rotate(90deg); }
+  .tool .result {
+    display: none;
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+    white-space: pre-wrap;
+    color: var(--text-dim);
+    max-height: 400px;
+    overflow-y: auto;
+  }
+  .tool.open .result { display: block; }
+  .tool.error { border-left-color: var(--red); }
+  .tool.error .head .name { color: var(--red); }
+
+  .status-line {
+    font-size: 12px;
+    color: var(--text-dim);
+    font-style: italic;
+    padding: 4px 0;
+  }
+  .status-line.error { color: var(--red); }
+
+  /* ---------- Empty state ---------- */
+  .empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-dim);
+  }
+  .empty h1 {
+    font-family: var(--mono);
+    color: var(--accent);
+    font-size: 32px;
+    margin-bottom: 8px;
+    letter-spacing: -1px;
+  }
+  .empty p { margin: 6px 0; font-size: 14px; }
+  .hint-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+    max-width: 600px;
+    margin: 28px auto 0;
+  }
+  .hint-card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    padding: 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s;
+  }
+  .hint-card:hover { border-color: var(--accent); }
+  .hint-card .title { color: var(--text); font-weight: 600; margin-bottom: 4px; font-size: 13px; }
+  .hint-card .sub { color: var(--text-dim); font-size: 12px; }
+
+  /* ---------- Input ---------- */
+  footer {
+    background: var(--bg-elev);
+    border-top: 1px solid var(--border);
+    padding: 14px 20px;
+  }
+  .input-row {
+    max-width: 820px;
+    margin: 0 auto;
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+  }
+  .input-row textarea {
+    flex: 1;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 12px;
+    border-radius: 8px;
+    resize: none;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.5;
+    outline: none;
+    max-height: 200px;
+  }
+  .input-row textarea:focus { border-color: var(--accent); }
+  .btn {
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.15s;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #1a0e08;
+    font-weight: 600;
+  }
+  .btn.primary:hover { background: #e5876a; }
+  .btn.danger { color: var(--red); }
+  .btn.danger:hover { background: var(--red); color: white; border-color: var(--red); }
+  #mic-btn { font-size: 16px; padding: 8px 12px; }
+  #mic-btn.recording {
+    background: var(--red);
+    border-color: var(--red);
+    color: white;
+    animation: pulse 1.2s infinite;
+  }
+  .help-section {
+    margin-bottom: 18px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .help-section:last-child { border-bottom: none; }
+  .help-section h3 {
+    color: var(--accent);
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+  .help-section .body {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-dim);
+  }
+  .help-section .body p { margin: 6px 0; }
+  .help-section .body code {
+    background: var(--bg-elev-2);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--cyan);
+  }
+  .help-section .body strong { color: var(--text); }
+  .help-section .body ul, .help-section .body ol { margin: 6px 0 6px 20px; }
+  .btn.small { padding: 4px 10px; font-size: 11.5px; }
+  .input-row .hint {
+    font-size: 11px;
+    color: var(--text-dim);
+    max-width: 820px;
+    margin: 6px auto 0;
+    text-align: right;
+  }
+  .footer-hint {
+    font-size: 11px;
+    color: var(--text-dim);
+    max-width: 820px;
+    margin: 6px auto 0;
+    text-align: right;
+  }
+
+  /* ---------- Painel direito ---------- */
+  aside.panel {
+    background: var(--bg-elev);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+  }
+  .panel-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-elev);
+  }
+  .panel-tab {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    padding: 12px 8px;
+    font-size: 12px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+  }
+  .panel-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .panel-tab:hover:not(.active) { color: var(--text); }
+
+  .panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+  }
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+
+  .panel-action {
+    width: 100%;
+    margin-bottom: 12px;
+    padding: 8px 10px;
+    background: var(--bg-elev-2);
+    border: 1px dashed var(--border-2);
+    color: var(--text-dim);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.15s;
+  }
+  .panel-action:hover {
+    border-style: solid;
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .skill-group {
+    margin-bottom: 14px;
+  }
+  .skill-group-title {
+    color: var(--text-mute);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    padding: 4px 4px 6px;
+  }
+  .skill {
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 9px 10px;
+    margin-bottom: 6px;
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  .skill .check {
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1.5px solid var(--border-2);
+    background: var(--bg);
+    cursor: pointer;
+    flex-shrink: 0;
+    margin-top: 2px;
+    position: relative;
+  }
+  .skill .check:checked {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .skill .check:checked::after {
+    content: '✓';
+    position: absolute;
+    top: -3px;
+    left: 1px;
+    color: #1a0e08;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .skill .info { flex: 1; min-width: 0; }
+  .skill .name {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text);
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .skill .desc {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 3px;
+    line-height: 1.4;
+  }
+
+  .schedule {
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 8px;
+  }
+  .schedule .name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .schedule .name .x {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    color: var(--text-mute);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 0 4px;
+  }
+  .schedule .name .x:hover { color: var(--red); }
+  .schedule .cron {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--cyan);
+    margin-top: 4px;
+  }
+  .schedule .meta {
+    font-size: 10.5px;
+    color: var(--text-mute);
+    margin-top: 4px;
+  }
+  .schedule .actions {
+    margin-top: 8px;
+    display: flex;
+    gap: 6px;
+  }
+
+  /* ---------- Modal ---------- */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    animation: fadeIn 0.18s ease;
+  }
+  .modal {
+    background: var(--bg-elev);
+    border: 1px solid var(--border-2);
+    border-radius: 12px;
+    padding: 20px 22px;
+    width: min(560px, 92vw);
+    max-height: 86vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  }
+  .modal h2 {
+    font-size: 16px;
+    margin-bottom: 14px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .modal h2 .close {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0 6px;
+    line-height: 1;
+  }
+  .modal h2 .close:hover { color: var(--red); }
+  .modal label {
+    display: block;
+    color: var(--text-dim);
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-bottom: 5px;
+    margin-top: 12px;
+    font-weight: 600;
+  }
+  .modal input, .modal textarea, .modal select {
+    width: 100%;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 9px 11px;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+  }
+  .modal input:focus, .modal textarea:focus, .modal select:focus { border-color: var(--accent); }
+  .modal textarea { resize: vertical; min-height: 70px; font-family: var(--mono); }
+  .modal .row { display: flex; gap: 10px; }
+  .modal .row > * { flex: 1; }
+  .modal .actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 18px;
+  }
+  .modal .modal-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 14px;
+  }
+  .modal .modal-tab {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    padding: 8px 14px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .modal .modal-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .modal .modal-pane { display: none; }
+  .modal .modal-pane.active { display: block; }
+
+  .marketplace-item {
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .marketplace-item:hover { border-color: var(--accent); background: var(--bg-elev-3); }
+  .marketplace-item .name {
+    font-weight: 600;
+    color: var(--text);
+    font-size: 13px;
+  }
+  .marketplace-item .desc {
+    font-size: 11.5px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  .profile-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    background: var(--bg-elev-2);
+    transition: all 0.15s;
+  }
+  .profile-row:hover { border-color: var(--accent); }
+  .profile-row.active { border-color: var(--accent); background: rgba(217, 119, 87, 0.08); }
+  .profile-row .pname { flex: 1; font-weight: 600; }
+  .profile-row .pdesc {
+    display: block;
+    font-size: 11px;
+    color: var(--text-dim);
+    font-weight: 400;
+  }
+
+  /* ---------- Toasts ---------- */
+  .toasts {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 200;
+    pointer-events: none;
+  }
+  .toast {
+    background: var(--bg-elev-3);
+    border: 1px solid var(--border-2);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-size: 13px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+    min-width: 220px;
+    max-width: 360px;
+    animation: slideIn 0.25s ease;
+    pointer-events: auto;
+  }
+  .toast.success { border-left-color: var(--green); }
+  .toast.warn    { border-left-color: var(--yellow); }
+  .toast.error   { border-left-color: var(--red); }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(20px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  /* ---------- Scrollbar ---------- */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3a3a3e; }
+
+  .hljs { background: transparent !important; padding: 0 !important; }
+
+  /* ---------- Responsivo ---------- */
+  @media (max-width: 1100px) {
+    .app { grid-template-columns: var(--sidebar-w) 1fr 0; }
+    aside.panel { display: none; }
+    .app.show-right { grid-template-columns: var(--sidebar-w) 1fr var(--panel-w); }
+    .app.show-right aside.panel { display: flex; }
+  }
+  @media (max-width: 800px) {
+    .app { grid-template-columns: 0 1fr 0; }
+    aside.sidebar { display: none; }
+    .app.show-left aside.sidebar { display: flex; }
+    .app.show-left { grid-template-columns: var(--sidebar-w) 1fr 0; }
+    .chip.cwd { max-width: 180px; }
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- =============== SIDEBAR ESQUERDA =============== -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">mtzCode<span class="by">by Jean Mortaza</span></div>
+    </div>
+    <button class="new-chat-btn" id="new-chat-btn">+ Nova conversa</button>
+    <div class="sidebar-body">
+
+      <div class="section" id="folders-section">
+        <div class="section-title">
+          Pastas
+          <button class="add" id="add-folder-btn" title="Adicionar pasta">+</button>
+        </div>
+        <div id="folders-list">
+          <div class="empty-list">nenhuma pasta favorita</div>
+        </div>
+      </div>
+
+      <div class="section" id="sessions-section">
+        <div class="section-title">Conversas</div>
+        <div id="sessions-list">
+          <div class="empty-list">nenhuma conversa anterior</div>
+        </div>
+      </div>
+
+    </div>
+  </aside>
+
+  <!-- =============== CENTRO / CHAT =============== -->
+  <div class="center">
+    <div class="chat-header">
+      <button class="toggle-btn" id="toggle-left" title="Colapsar sidebar">☰</button>
+      <button class="chip" id="profile-chip" title="Trocar perfil">
+        <span>perfil:</span>
+        <strong id="profile-name">—</strong>
+        <span id="locality-badge" class="badge local">local</span>
+      </button>
+      <button class="chip cwd" id="cwd-chip" title="Trocar pasta">
+        <span>📁</span>
+        <span class="path" id="cwd-text">—</span>
+      </button>
+      <span id="auto-badge" class="badge auto" style="display:none;">AUTO</span>
+      <div class="spacer"></div>
+      <button class="icon-btn" id="auto-toggle" title="Modo autônomo">⚡ auto</button>
+      <button class="icon-btn" id="train-btn" title="Modo treinamento (fine-tuning LoRA)">🎓 treinar</button>
+      <button class="icon-btn" id="settings-btn" title="Configurações (API keys, modelo, contexto)">⚙ config</button>
+      <button class="icon-btn" id="help-btn" title="Ajuda">? ajuda</button>
+      <button class="icon-btn" id="export-btn" title="Exportar conversa">↓ export</button>
+      <button class="icon-btn" id="reset-btn" title="Limpar histórico">⌫ limpar</button>
+      <button class="toggle-btn" id="toggle-right" title="Colapsar painel">⊞</button>
+    </div>
+
+    <main id="main">
+      <div class="chat" id="chat">
+        <div class="empty" id="empty">
+          <h1>mtzCode</h1>
+          <p>Assistente de código local, sem APIs externas.</p>
+          <p style="font-size: 12px; margin-top: 14px;">
+            Pressione <kbd>Enter</kbd> pra enviar, <kbd>Shift+Enter</kbd> pra nova linha.
+          </p>
+          <div class="hint-cards">
+            <div class="hint-card" data-prompt="Liste os arquivos .py deste projeto">
+              <div class="title">📂 Explorar projeto</div>
+              <div class="sub">Liste os arquivos .py deste projeto</div>
+            </div>
+            <div class="hint-card" data-prompt="Encontre todos os TODOs no código">
+              <div class="title">🔍 Buscar TODOs</div>
+              <div class="sub">Encontre todos os TODOs no código</div>
+            </div>
+            <div class="hint-card" data-prompt="Leia o README e resuma o projeto">
+              <div class="title">📖 Resumo do projeto</div>
+              <div class="sub">Leia o README e resuma</div>
+            </div>
+            <div class="hint-card" data-prompt="Rode git status e me diga o que está pendente">
+              <div class="title">🔧 Git status</div>
+              <div class="sub">Checar mudanças pendentes</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer>
+      <div id="attach-bar" style="display:none;padding:6px 12px 0;font-size:11px;color:var(--text-mute);">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          <span style="text-transform:uppercase;letter-spacing:.5px;opacity:.7;">Anexos</span>
+          <span id="attach-count" style="background:var(--accent);color:#000;border-radius:10px;padding:1px 7px;font-weight:600;">0</span>
+        </div>
+        <div id="attach-list" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+      </div>
+      <div id="queue-bar" style="display:none;padding:6px 12px 0;font-size:11px;color:var(--text-mute);">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          <span style="text-transform:uppercase;letter-spacing:.5px;opacity:.7;">Fila</span>
+          <span id="queue-count" style="background:var(--accent);color:#000;border-radius:10px;padding:1px 7px;font-weight:600;">0</span>
+          <button id="queue-clear" class="btn" style="margin-left:auto;font-size:10px;padding:2px 8px;">limpar</button>
+        </div>
+        <div id="queue-list" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+      </div>
+      <div class="input-row">
+        <textarea id="input" rows="2" placeholder="Pergunte ou peça algo para o mtzcode... (arraste arquivos pra anexar)"></textarea>
+        <input type="file" id="attach-input" multiple style="display:none;" />
+        <button class="btn" id="attach-btn" title="Anexar arquivo(s) ao chat">📎</button>
+        <button class="btn" id="mic-btn" title="Ditar por voz (⌘/Ctrl + Shift + M)">🎤</button>
+        <button class="btn primary" id="send-btn">Enviar ↵</button>
+      </div>
+      <div class="footer-hint">
+        100% local · <span id="status-line">pronto</span> · <span style="opacity:.6;">enquanto roda, novas mensagens entram na fila ↑</span>
+      </div>
+    </footer>
+  </div>
+
+  <!-- =============== PAINEL DIREITO =============== -->
+  <aside class="panel" id="panel">
+    <div class="panel-tabs">
+      <button class="panel-tab active" data-tab="todos">Tarefas</button>
+      <button class="panel-tab" data-tab="skills">Habilidades</button>
+      <button class="panel-tab" data-tab="schedules">Agendamentos</button>
+    </div>
+    <div class="panel-body">
+
+      <div class="tab-pane active" id="tab-todos">
+        <div style="display:flex;gap:6px;margin-bottom:10px;">
+          <button class="panel-action" id="todos-refresh-btn" style="flex:1;">↻ atualizar</button>
+          <button class="panel-action" id="todos-clear-btn" style="flex:1;">🗑 limpar</button>
+        </div>
+        <div id="todos-summary" style="font-size:11px;color:var(--text-mute);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;"></div>
+        <div id="todos-list">
+          <div class="empty-list">nenhuma tarefa — o assistente cria quando precisa</div>
+        </div>
+      </div>
+
+      <div class="tab-pane" id="tab-skills">
+        <button class="panel-action" id="install-skill-btn">+ Instalar habilidade</button>
+        <div id="skills-list">
+          <div class="empty-list">carregando...</div>
+        </div>
+      </div>
+
+      <div class="tab-pane" id="tab-schedules">
+        <button class="panel-action" id="add-schedule-btn">+ Novo agendamento</button>
+        <div id="schedules-list">
+          <div class="empty-list">carregando...</div>
+        </div>
+      </div>
+
+    </div>
+  </aside>
+
+</div>
+
+<div class="toasts" id="toasts"></div>
+<div id="modal-root"></div>
+
+<script>
+(() => {
+  // ============================================================
+  // marked + hljs
+  // ============================================================
+  marked.setOptions({
+    breaks: true,
+    gfm: true,
+    highlight: (code, lang) => {
+      if (lang && hljs.getLanguage(lang)) {
+        try { return hljs.highlight(code, { language: lang }).value; } catch(e) {}
+      }
+      try { return hljs.highlightAuto(code).value; } catch(e) { return code; }
+    },
+  });
+
+  const $ = (id) => document.getElementById(id);
+  const $$ = (sel, ctx=document) => ctx.querySelectorAll(sel);
+
+  // ============================================================
+  // Estado global
+  // ============================================================
+  const state = {
+    skills: [],
+    sessions: [],
+    folders: [],
+    schedules: [],
+    profiles: [],
+    currentSession: null,
+    autoMode: false,
+    profile: null,
+    cwd: '',
+    busy: false,
+    queue: [],
+    attachments: [],
+  };
+
+  // Endpoints "opcionais" — se 404, marcamos como indisponíveis
+  const features = {
+    sessions: true,
+    folders: true,
+    skills: true,
+    schedules: true,
+    auto: true,
+    history: true,
+  };
+
+  // ============================================================
+  // Utils
+  // ============================================================
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    })[c]);
+  }
+
+  function relativeTime(ts) {
+    if (!ts) return '';
+    const now = Date.now() / 1000;
+    const t = typeof ts === 'string' ? Date.parse(ts) / 1000 : ts;
+    if (isNaN(t)) return '';
+    const d = now - t;
+    if (d < 60) return 'agora';
+    if (d < 3600) return `há ${Math.floor(d/60)}min`;
+    if (d < 86400) return `há ${Math.floor(d/3600)}h`;
+    if (d < 86400*7) return `há ${Math.floor(d/86400)}d`;
+    return new Date(t*1000).toLocaleDateString('pt-BR');
+  }
+
+  function shortPath(p) {
+    if (!p) return '';
+    const home = '/Users/';
+    if (p.startsWith(home)) {
+      const parts = p.split('/').filter(Boolean);
+      if (parts.length > 4) return '~/' + parts.slice(2).join('/');
+    }
+    return p;
+  }
+
+  async function api(path, opts={}) {
+    const res = await fetch(path, {
+      headers: { 'Content-Type': 'application/json' },
+      ...opts,
+    });
+    if (res.status === 404 || res.status === 503) {
+      const err = new Error('feature_unavailable');
+      err.status = res.status;
+      throw err;
+    }
+    if (!res.ok) {
+      let msg = res.status + '';
+      try { const j = await res.json(); msg = j.detail || msg; } catch(e) {}
+      const err = new Error(msg);
+      err.status = res.status;
+      throw err;
+    }
+    const ct = res.headers.get('content-type') || '';
+    if (ct.includes('application/json')) return res.json();
+    return res.text();
+  }
+
+  // ============================================================
+  // Toasts
+  // ============================================================
+  function toast(msg, kind='info', ttl=3500) {
+    const el = document.createElement('div');
+    el.className = 'toast ' + kind;
+    el.textContent = msg;
+    $('toasts').appendChild(el);
+    setTimeout(() => {
+      el.style.opacity = '0';
+      el.style.transition = 'opacity 0.3s';
+      setTimeout(() => el.remove(), 300);
+    }, ttl);
+  }
+
+  // ============================================================
+  // Modais
+  // ============================================================
+  function openModal(html) {
+    closeModal();
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `<div class="modal">${html}</div>`;
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closeModal();
+    });
+    $('modal-root').appendChild(overlay);
+    const closeBtn = overlay.querySelector('.close');
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    return overlay.querySelector('.modal');
+  }
+  function closeModal() {
+    $('modal-root').innerHTML = '';
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeModal();
+  });
+
+  // ============================================================
+  // Carga inicial / state
+  // ============================================================
+  async function loadState() {
+    try {
+      const [s, p] = await Promise.all([
+        api('/api/state'),
+        api('/api/profiles'),
+      ]);
+      state.cwd = s.cwd;
+      state.profile = s.profile;
+      state.profiles = p.profiles || [];
+      $('cwd-text').textContent = shortPath(s.cwd);
+      $('cwd-text').title = s.cwd;
+      $('profile-name').textContent = s.profile.label || s.profile.name;
+      const isLocal = s.profile.is_local;
+      const badge = $('locality-badge');
+      badge.textContent = isLocal ? 'local' : 'cloud';
+      badge.className = 'badge ' + (isLocal ? 'local' : 'cloud');
+    } catch (e) {
+      toast('falha ao carregar estado: ' + e.message, 'error');
+    }
+  }
+
+  // ============================================================
+  // Pastas favoritas
+  // ============================================================
+  async function loadFolders() {
+    if (!features.folders) return;
+    try {
+      const data = await api('/api/folders');
+      state.folders = data.folders || data || [];
+      renderFolders();
+    } catch (e) {
+      if (e.status === 404 || e.status === 503) {
+        features.folders = false;
+        $('folders-section').style.display = 'none';
+      }
+    }
+  }
+
+  function renderFolders() {
+    const container = $('folders-list');
+    if (!state.folders.length) {
+      container.innerHTML = '<div class="empty-list">nenhuma pasta favorita</div>';
+      return;
+    }
+    container.innerHTML = '';
+    state.folders.forEach(f => {
+      const id = f.id || f.path;
+      const isActive = (f.path === state.cwd) || f.active;
+      const el = document.createElement('div');
+      el.className = 'item' + (isActive ? ' active' : '');
+      el.innerHTML = `
+        <span class="radio"></span>
+        <span class="label" title="${escapeHtml(f.path)}">
+          ${escapeHtml(f.label || f.name || f.path.split('/').pop())}
+          <span class="sub">${escapeHtml(shortPath(f.path))}</span>
+        </span>
+        <button class="x" title="Remover">×</button>
+      `;
+      el.addEventListener('click', (ev) => {
+        if (ev.target.classList.contains('x')) return;
+        useFolder(id, f.path);
+      });
+      el.querySelector('.x').addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        removeFolder(id);
+      });
+      container.appendChild(el);
+    });
+  }
+
+  async function useFolder(id, path) {
+    try {
+      try {
+        await api('/api/folders/use', { method: 'POST', body: JSON.stringify({ id, path }) });
+      } catch (e) {
+        // fallback: se /folders/use não existe, usa /api/cwd
+        await api('/api/cwd', { method: 'POST', body: JSON.stringify({ path }) });
+      }
+      state.cwd = path;
+      $('cwd-text').textContent = shortPath(path);
+      $('cwd-text').title = path;
+      renderFolders();
+      toast('pasta ativa: ' + (path.split('/').pop() || path), 'success');
+    } catch (e) {
+      toast('falha trocando pasta: ' + e.message, 'error');
+    }
+  }
+
+  async function removeFolder(id) {
+    try {
+      await api('/api/folders?id=' + encodeURIComponent(id), { method: 'DELETE' });
+      toast('pasta removida', 'success');
+      loadFolders();
+    } catch (e) {
+      toast('falha removendo: ' + e.message, 'error');
+    }
+  }
+
+  function openAddFolderModal() {
+    const m = openModal(`
+      <h2>Adicionar pasta favorita <button class="close">×</button></h2>
+      <label>Caminho absoluto</label>
+      <input id="mf-path" type="text" placeholder="/Users/voce/projetos/foo" />
+      <label>Rótulo (opcional)</label>
+      <input id="mf-label" type="text" placeholder="meu projeto" />
+      <div class="actions">
+        <button class="btn" id="mf-cancel">Cancelar</button>
+        <button class="btn primary" id="mf-save">Adicionar</button>
+      </div>
+    `);
+    m.querySelector('#mf-cancel').addEventListener('click', closeModal);
+    m.querySelector('#mf-save').addEventListener('click', async () => {
+      const path = m.querySelector('#mf-path').value.trim();
+      const label = m.querySelector('#mf-label').value.trim();
+      if (!path) { toast('caminho é obrigatório', 'warn'); return; }
+      try {
+        await api('/api/folders', {
+          method: 'POST',
+          body: JSON.stringify({ path, label: label || null }),
+        });
+        toast('pasta adicionada', 'success');
+        closeModal();
+        await loadFolders();
+        await useFolder(null, path);
+      } catch (e) {
+        toast('falha: ' + e.message, 'error');
+      }
+    });
+    setTimeout(() => m.querySelector('#mf-path').focus(), 50);
+  }
+
+  // ============================================================
+  // Sessões
+  // ============================================================
+  async function loadSessions() {
+    if (!features.sessions) return;
+    try {
+      const data = await api('/api/sessions');
+      state.sessions = data.sessions || data || [];
+      renderSessions();
+    } catch (e) {
+      if (e.status === 404 || e.status === 503) {
+        features.sessions = false;
+        $('sessions-section').style.display = 'none';
+      }
+    }
+  }
+
+  function renderSessions() {
+    const container = $('sessions-list');
+    if (!state.sessions.length) {
+      container.innerHTML = '<div class="empty-list">nenhuma conversa anterior</div>';
+      return;
+    }
+    container.innerHTML = '';
+    state.sessions.forEach(s => {
+      const id = s.id || s.session_id;
+      const isActive = state.currentSession === id;
+      const title = s.title || s.first_user_message || s.first_message || s.preview || 'sem título';
+      const el = document.createElement('div');
+      el.className = 'item' + (isActive ? ' active' : '');
+      el.style.display = 'flex';
+      el.style.alignItems = 'center';
+      el.style.gap = '6px';
+      el.innerHTML = `
+        <span class="label" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;">
+          ${escapeHtml(String(title).slice(0, 50))}
+          <span class="sub">${escapeHtml(relativeTime(s.updated_at || s.created_at || s.ts || s.timestamp))}</span>
+        </span>
+        <button class="session-del" title="apagar conversa" style="background:none;border:none;color:#888;cursor:pointer;padding:4px 6px;font-size:14px;border-radius:4px;">✕</button>
+      `;
+      el.querySelector('.label').addEventListener('click', () => resumeSession(id));
+      const delBtn = el.querySelector('.session-del');
+      delBtn.addEventListener('mouseenter', () => { delBtn.style.background = 'rgba(255,80,80,.15)'; delBtn.style.color = '#f88'; });
+      delBtn.addEventListener('mouseleave', () => { delBtn.style.background = ''; delBtn.style.color = '#888'; });
+      delBtn.addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        if (!confirm('Apagar esta conversa?')) return;
+        try {
+          await api(`/api/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+          state.sessions = state.sessions.filter(x => (x.id || x.session_id) !== id);
+          if (state.currentSession === id) state.currentSession = null;
+          renderSessions();
+          toast('conversa apagada', 'success');
+        } catch (e) {
+          toast('falha ao apagar: ' + e.message, 'error');
+        }
+      });
+      container.appendChild(el);
+    });
+  }
+
+  async function resumeSession(id) {
+    try {
+      await api(`/api/sessions/${encodeURIComponent(id)}/resume`, { method: 'POST' });
+      state.currentSession = id;
+      // Carrega o histórico reconstruído (server retorna {history:[...]})
+      try {
+        const hist = await api('/api/history');
+        const msgs = Array.isArray(hist) ? hist : (hist.history || hist.messages || []);
+        renderHistory(msgs);
+      } catch (e) {
+        console.warn('history failed', e);
+      }
+      renderSessions();
+      toast('conversa carregada', 'success');
+    } catch (e) {
+      toast('falha: ' + e.message, 'error');
+    }
+  }
+
+  function renderHistory(messages) {
+    const chat = $('chat');
+    chat.innerHTML = '';
+    if (!Array.isArray(messages) || !messages.length) {
+      const empty = document.createElement('div');
+      empty.id = 'empty';
+      empty.className = 'empty';
+      empty.innerHTML = '<h1>mtzCode</h1><p>(conversa vazia)</p>';
+      chat.appendChild(empty);
+      return;
+    }
+    messages.forEach(m => {
+      const role = m.role || 'assistant';
+      // pula mensagens "tool" (resultados de tool calls) — UI mostra só user/assistant
+      if (role !== 'user' && role !== 'assistant') return;
+      const text = m.content || m.text || '';
+      if (!text && !(m.tool_calls && m.tool_calls.length)) return;
+      const { body } = addMessage(role);
+      if (role === 'user') body.textContent = text;
+      else renderMarkdown(body, text);
+    });
+  }
+
+  async function newSession() {
+    try {
+      try {
+        await api('/api/sessions/new', { method: 'POST' });
+      } catch (e) { /* ignore */ }
+      await api('/api/reset', { method: 'POST' });
+      state.currentSession = null;
+      const chat = $('chat');
+      chat.innerHTML = '';
+      const empty = document.createElement('div');
+      empty.id = 'empty';
+      empty.className = 'empty';
+      empty.innerHTML = `
+        <h1>mtzCode</h1>
+        <p>Nova conversa iniciada.</p>
+      `;
+      chat.appendChild(empty);
+      renderSessions();
+      toast('nova conversa', 'success');
+    } catch (e) {
+      toast('falha: ' + e.message, 'error');
+    }
+  }
+
+  // ============================================================
+  // Skills
+  // ============================================================
+  async function loadTodos() {
+    try {
+      const data = await api('/api/todos');
+      const list = $('todos-list');
+      const sum = $('todos-summary');
+      const items = data.todos || [];
+      const s = data.summary || {};
+      if (!items.length) {
+        list.innerHTML = '<div class="empty-list">nenhuma tarefa — o assistente cria quando precisa</div>';
+        sum.textContent = '';
+        return;
+      }
+      sum.textContent = `${s.total || 0} total · ${s.completed || 0} done · ${s.in_progress || 0} em andamento · ${s.pending || 0} pendente`;
+      list.innerHTML = '';
+      items.forEach((t, i) => {
+        const row = document.createElement('div');
+        const status = t.status || 'pending';
+        const color = status === 'completed' ? 'var(--ok, #4ade80)'
+                   : status === 'in_progress' ? 'var(--accent)'
+                   : 'var(--text-mute)';
+        const icon = status === 'completed' ? '✓'
+                   : status === 'in_progress' ? '▶'
+                   : '○';
+        const deco = status === 'completed' ? 'line-through' : 'none';
+        row.style.cssText = `display:flex;gap:8px;padding:8px 10px;margin-bottom:4px;background:var(--bg-elev-2);border:1px solid var(--border);border-radius:6px;font-size:12px;align-items:flex-start;`;
+        row.innerHTML = `
+          <span style="color:${color};font-weight:bold;font-size:13px;line-height:1.2;">${icon}</span>
+          <span style="flex:1;color:var(--text);text-decoration:${deco};line-height:1.4;">${escapeHtml(t.content || '')}</span>
+        `;
+        list.appendChild(row);
+      });
+    } catch (e) {
+      console.warn('loadTodos falhou', e);
+    }
+  }
+
+  async function loadSkills() {
+    if (!features.skills) return;
+    try {
+      const data = await api('/api/skills');
+      state.skills = data.skills || data || [];
+      renderSkills();
+    } catch (e) {
+      if (e.status === 404 || e.status === 503) {
+        features.skills = false;
+        $('skills-list').innerHTML = '<div class="empty-list">módulo de habilidades indisponível</div>';
+        $('install-skill-btn').style.display = 'none';
+      }
+    }
+  }
+
+  function renderSkills() {
+    const container = $('skills-list');
+    if (!state.skills.length) {
+      container.innerHTML = '<div class="empty-list">nenhuma habilidade</div>';
+      return;
+    }
+    const groups = {};
+    state.skills.forEach(sk => {
+      const k = sk.kind || 'tools';
+      (groups[k] = groups[k] || []).push(sk);
+    });
+    const labels = {
+      tools: 'Ferramentas',
+      mcp_server: 'Servidores MCP',
+      slash_command: 'Comandos /',
+    };
+    const order = ['tools', 'mcp_server', 'slash_command'];
+    container.innerHTML = '';
+    order.concat(Object.keys(groups).filter(k => !order.includes(k))).forEach(k => {
+      if (!groups[k]) return;
+      const g = document.createElement('div');
+      g.className = 'skill-group';
+      g.innerHTML = `<div class="skill-group-title">${labels[k] || k}</div>`;
+      groups[k].forEach(sk => {
+        const id = sk.id || sk.name;
+        const enabled = sk.enabled !== false;
+        const item = document.createElement('div');
+        item.className = 'skill';
+        item.innerHTML = `
+          <input type="checkbox" class="check" ${enabled ? 'checked' : ''} />
+          <div class="info">
+            <div class="name">
+              ${escapeHtml(sk.name || id)}
+              ${sk.destructive ? '<span class="badge danger">destrutivo</span>' : ''}
+            </div>
+            ${sk.description ? `<div class="desc">${escapeHtml(sk.description)}</div>` : ''}
+          </div>
+        `;
+        item.querySelector('.check').addEventListener('change', () => toggleSkill(id));
+        g.appendChild(item);
+      });
+      container.appendChild(g);
+    });
+  }
+
+  async function toggleSkill(id) {
+    try {
+      await api(`/api/skills/${encodeURIComponent(id)}/toggle`, { method: 'POST' });
+      toast('habilidade atualizada', 'success');
+      loadSkills();
+    } catch (e) {
+      toast('falha: ' + e.message, 'error');
+    }
+  }
+
+  function openInstallSkillModal() {
+    const m = openModal(`
+      <h2>Instalar habilidade <button class="close">×</button></h2>
+      <div class="modal-tabs">
+        <button class="modal-tab active" data-mtab="market">Marketplace</button>
+        <button class="modal-tab" data-mtab="manual">Manual</button>
+      </div>
+      <div class="modal-pane active" id="mp-market">
+        <div id="market-list"><div class="empty-list">carregando...</div></div>
+      </div>
+      <div class="modal-pane" id="mp-manual">
+        <label>Nome</label>
+        <input id="mi-name" type="text" placeholder="meu-mcp" />
+        <label>Comando</label>
+        <input id="mi-cmd" type="text" placeholder="npx" />
+        <label>Argumentos (separados por espaço)</label>
+        <input id="mi-args" type="text" placeholder="-y @scope/pacote" />
+        <label>Variáveis de ambiente (JSON)</label>
+        <textarea id="mi-env" placeholder='{"API_KEY": "..."}'></textarea>
+        <div class="actions">
+          <button class="btn" id="mi-cancel">Cancelar</button>
+          <button class="btn primary" id="mi-save">Instalar</button>
+        </div>
+      </div>
+    `);
+    m.querySelectorAll('.modal-tab').forEach(t => {
+      t.addEventListener('click', () => {
+        m.querySelectorAll('.modal-tab').forEach(x => x.classList.remove('active'));
+        m.querySelectorAll('.modal-pane').forEach(x => x.classList.remove('active'));
+        t.classList.add('active');
+        m.querySelector('#mp-' + t.dataset.mtab).classList.add('active');
+      });
+    });
+    // carrega marketplace
+    api('/api/skills/marketplace').then(data => {
+      const items = data.items || data || [];
+      const list = m.querySelector('#market-list');
+      if (!items.length) {
+        list.innerHTML = '<div class="empty-list">nenhum item disponível</div>';
+        return;
+      }
+      list.innerHTML = '';
+      items.forEach(it => {
+        const el = document.createElement('div');
+        el.className = 'marketplace-item';
+        el.innerHTML = `
+          <div class="name">${escapeHtml(it.name)}</div>
+          ${it.description ? `<div class="desc">${escapeHtml(it.description)}</div>` : ''}
+        `;
+        el.addEventListener('click', () => installMcp(it));
+        list.appendChild(el);
+      });
+    }).catch(() => {
+      m.querySelector('#market-list').innerHTML = '<div class="empty-list">marketplace indisponível</div>';
+    });
+
+    m.querySelector('#mi-cancel').addEventListener('click', closeModal);
+    m.querySelector('#mi-save').addEventListener('click', async () => {
+      const name = m.querySelector('#mi-name').value.trim();
+      const cmd = m.querySelector('#mi-cmd').value.trim();
+      const args = m.querySelector('#mi-args').value.trim().split(/\s+/).filter(Boolean);
+      const envRaw = m.querySelector('#mi-env').value.trim();
+      let env = {};
+      if (envRaw) {
+        try { env = JSON.parse(envRaw); }
+        catch (e) { toast('JSON de env inválido', 'error'); return; }
+      }
+      if (!name || !cmd) { toast('nome e comando são obrigatórios', 'warn'); return; }
+      await installMcp({ name, command: cmd, args, env });
+    });
+  }
+
+  async function installMcp(spec) {
+    try {
+      await api('/api/skills/install_mcp', {
+        method: 'POST',
+        body: JSON.stringify(spec),
+      });
+      toast('habilidade instalada: ' + (spec.name || ''), 'success');
+      closeModal();
+      loadSkills();
+    } catch (e) {
+      toast('falha instalando: ' + e.message, 'error');
+    }
+  }
+
+  // ============================================================
+  // Agendamentos
+  // ============================================================
+  async function loadSchedules() {
+    if (!features.schedules) return;
+    try {
+      const data = await api('/api/schedules');
+      state.schedules = data.schedules || data || [];
+      renderSchedules();
+    } catch (e) {
+      if (e.status === 404 || e.status === 503) {
+        features.schedules = false;
+        $('schedules-list').innerHTML = '<div class="empty-list">scheduler indisponível</div>';
+        $('add-schedule-btn').style.display = 'none';
+      }
+    }
+  }
+
+  function renderSchedules() {
+    const container = $('schedules-list');
+    if (!state.schedules.length) {
+      container.innerHTML = '<div class="empty-list">nenhum agendamento</div>';
+      return;
+    }
+    container.innerHTML = '';
+    state.schedules.forEach(s => {
+      const id = s.id || s.name;
+      const el = document.createElement('div');
+      el.className = 'schedule';
+      el.innerHTML = `
+        <div class="name">
+          ${escapeHtml(s.name || id)}
+          <button class="x" title="Remover">×</button>
+        </div>
+        <div class="cron">${escapeHtml(s.cron || s.schedule || '')}</div>
+        <div class="meta">
+          ${s.last_run ? 'última: ' + relativeTime(s.last_run) : 'nunca executado'}
+          ${s.status ? ' · ' + escapeHtml(s.status) : ''}
+        </div>
+        <div class="actions">
+          <button class="btn small" data-act="run">▶ rodar agora</button>
+        </div>
+      `;
+      el.querySelector('[data-act="run"]').addEventListener('click', () => runSchedule(id));
+      el.querySelector('.x').addEventListener('click', () => removeSchedule(id));
+      container.appendChild(el);
+    });
+  }
+
+  async function runSchedule(id) {
+    try {
+      await api(`/api/schedules/${encodeURIComponent(id)}/run`, { method: 'POST' });
+      toast('agendamento disparado', 'success');
+      loadSchedules();
+    } catch (e) {
+      toast('falha: ' + e.message, 'error');
+    }
+  }
+
+  async function removeSchedule(id) {
+    try {
+      await api(`/api/schedules/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      toast('agendamento removido', 'success');
+      loadSchedules();
+    } catch (e) {
+      toast('falha: ' + e.message, 'error');
+    }
+  }
+
+  function naturalToCron(text) {
+    if (!text) return '';
+    const t = text.toLowerCase().trim();
+    // já é cron
+    if (/^[\d*\/\-,]+\s+[\d*\/\-,]+\s+[\d*\/\-,]+\s+[\d*\/\-,]+\s+[\d*\/\-,]+$/.test(t)) return t;
+    let m;
+    if ((m = t.match(/todo dia (\d{1,2})h(\d{0,2})/))) {
+      return `${m[2]||'0'} ${m[1]} * * *`;
+    }
+    if ((m = t.match(/a cada (\d+)\s*min/))) return `*/${m[1]} * * * *`;
+    if ((m = t.match(/a cada (\d+)\s*h/))) return `0 */${m[1]} * * *`;
+    if (t.includes('toda hora')) return '0 * * * *';
+    return '';
+  }
+
+  function openAddScheduleModal() {
+    const profilesOpts = state.profiles
+      .map(p => `<option value="${escapeHtml(p.name)}">${escapeHtml(p.label || p.name)}</option>`)
+      .join('');
+    const m = openModal(`
+      <h2>Novo agendamento <button class="close">×</button></h2>
+      <label>Nome</label>
+      <input id="ms-name" type="text" placeholder="ex: status diário do projeto" />
+      <label>Quando (cron ou linguagem natural)</label>
+      <div class="row">
+        <input id="ms-natural" type="text" placeholder='ex: "todo dia 9h" ou "0 9 * * *"' />
+      </div>
+      <div style="font-size:11px;color:var(--text-mute);margin-top:4px;">
+        Exemplos: <code>todo dia 9h</code> · <code>a cada 30 min</code> · <code>0 9 * * 1-5</code>
+      </div>
+      <label>Cron resolvido</label>
+      <input id="ms-cron" type="text" placeholder="0 9 * * *" readonly style="font-family:var(--mono);" />
+      <label>Prompt</label>
+      <textarea id="ms-prompt" placeholder="O que o mtzcode deve fazer..."></textarea>
+      <label>Perfil</label>
+      <select id="ms-profile">${profilesOpts}</select>
+      <div class="actions">
+        <button class="btn" id="ms-cancel">Cancelar</button>
+        <button class="btn primary" id="ms-save">Criar</button>
+      </div>
+    `);
+    const natInp = m.querySelector('#ms-natural');
+    const cronInp = m.querySelector('#ms-cron');
+    natInp.addEventListener('input', () => {
+      cronInp.value = naturalToCron(natInp.value);
+    });
+    m.querySelector('#ms-cancel').addEventListener('click', closeModal);
+    m.querySelector('#ms-save').addEventListener('click', async () => {
+      const name = m.querySelector('#ms-name').value.trim();
+      const cron = cronInp.value.trim() || natInp.value.trim();
+      const prompt = m.querySelector('#ms-prompt').value.trim();
+      const profile = m.querySelector('#ms-profile').value;
+      if (!name || !cron || !prompt) { toast('preencha todos os campos', 'warn'); return; }
+      try {
+        await api('/api/schedules', {
+          method: 'POST',
+          body: JSON.stringify({ name, cron, prompt, profile }),
+        });
+        toast('agendamento criado', 'success');
+        closeModal();
+        loadSchedules();
+      } catch (e) {
+        toast('falha: ' + e.message, 'error');
+      }
+    });
+  }
+
+  // ============================================================
+  // Auto mode
+  // ============================================================
+  async function toggleAuto() {
+    const next = !state.autoMode;
+    try {
+      await api('/api/auto', { method: 'POST', body: JSON.stringify({ enabled: next }) });
+      state.autoMode = next;
+      $('auto-badge').style.display = next ? '' : 'none';
+      $('auto-toggle').classList.toggle('on', next);
+      $('auto-toggle').textContent = next ? '⚡ trabalhando autonomamente' : '⚡ auto';
+      toast(next ? 'modo autônomo ativado' : 'modo manual', 'success');
+    } catch (e) {
+      if (e.status === 404 || e.status === 503) {
+        features.auto = false;
+        $('auto-toggle').style.display = 'none';
+        toast('modo auto indisponível', 'warn');
+      } else {
+        toast('falha: ' + e.message, 'error');
+      }
+    }
+  }
+
+  // ============================================================
+  // Profile modal
+  // ============================================================
+  function openProfileModal() {
+    const rows = state.profiles.map(p => {
+      const isActive = state.profile && state.profile.name === p.name;
+      const loc = p.is_local ? 'local' : 'cloud';
+      return `
+        <div class="profile-row ${isActive ? 'active' : ''}" data-name="${escapeHtml(p.name)}">
+          <div class="pname">
+            ${escapeHtml(p.label || p.name)}
+            <span class="pdesc">${escapeHtml(p.description || p.name)}</span>
+          </div>
+          <span class="badge ${loc}">${loc}</span>
+        </div>
+      `;
+    }).join('');
+    const m = openModal(`
+      <h2>Trocar perfil <button class="close">×</button></h2>
+      ${rows || '<div class="empty-list">nenhum perfil disponível</div>'}
+    `);
+    m.querySelectorAll('.profile-row').forEach(r => {
+      r.addEventListener('click', async () => {
+        const name = r.dataset.name;
+        try {
+          await api('/api/profile', { method: 'POST', body: JSON.stringify({ name }) });
+          await loadState();
+          toast('perfil alterado: ' + name, 'success');
+          closeModal();
+        } catch (e) {
+          toast('falha: ' + e.message, 'error');
+        }
+      });
+    });
+  }
+
+  // ============================================================
+  // CWD modal — folder browser navegável
+  // ============================================================
+  function openCwdModal() {
+    const m = openModal(`
+      <h2>Trocar pasta <button class="close">×</button></h2>
+      <div id="fb-path" style="font-family:ui-monospace,monospace;font-size:12px;opacity:.75;margin-bottom:8px;word-break:break-all;"></div>
+      <div id="fb-list" style="max-height:340px;overflow:auto;border:1px solid var(--border,#333);border-radius:8px;padding:4px;background:rgba(0,0,0,.2);"></div>
+      <div class="actions" style="margin-top:12px;">
+        <button class="btn" id="mc-cancel">Cancelar</button>
+        <button class="btn primary" id="mc-save">Usar esta pasta</button>
+      </div>
+    `);
+    let currentPath = state.cwd || null;
+
+    async function load(path) {
+      const list = m.querySelector('#fb-list');
+      list.innerHTML = '<div style="padding:12px;opacity:.6;">carregando...</div>';
+      try {
+        const qs = path ? ('?path=' + encodeURIComponent(path)) : '';
+        const data = await api('/api/browse' + qs);
+        currentPath = data.path;
+        m.querySelector('#fb-path').textContent = data.path;
+        const rows = [];
+        if (data.parent) {
+          rows.push(`<div class="fb-row" data-path="${escapeHtml(data.parent)}" style="padding:8px 10px;cursor:pointer;border-radius:6px;display:flex;gap:8px;align-items:center;">⬆️ <span style="opacity:.7;">.. (subir)</span></div>`);
+        }
+        if (data.entries.length === 0) {
+          rows.push('<div style="padding:12px;opacity:.5;">(vazio — nenhuma subpasta)</div>');
+        }
+        for (const e of data.entries) {
+          rows.push(`<div class="fb-row" data-path="${escapeHtml(e.path)}" style="padding:8px 10px;cursor:pointer;border-radius:6px;display:flex;gap:8px;align-items:center;">📁 <span>${escapeHtml(e.name)}</span></div>`);
+        }
+        list.innerHTML = rows.join('');
+        list.querySelectorAll('.fb-row').forEach(row => {
+          row.addEventListener('mouseenter', () => row.style.background = 'rgba(255,255,255,.06)');
+          row.addEventListener('mouseleave', () => row.style.background = '');
+          row.addEventListener('click', () => load(row.dataset.path));
+        });
+      } catch (e) {
+        list.innerHTML = `<div style="padding:12px;color:#f88;">erro: ${escapeHtml(e.message)}</div>`;
+      }
+    }
+
+    m.querySelector('#mc-cancel').addEventListener('click', closeModal);
+    m.querySelector('#mc-save').addEventListener('click', async () => {
+      if (!currentPath) return;
+      try {
+        const data = await api('/api/cwd', { method: 'POST', body: JSON.stringify({ path: currentPath }) });
+        state.cwd = data.cwd;
+        $('cwd-text').textContent = shortPath(data.cwd);
+        $('cwd-text').title = data.cwd;
+        toast('pasta: ' + shortPath(data.cwd), 'success');
+        closeModal();
+      } catch (e) {
+        toast('pasta inválida: ' + e.message, 'error');
+      }
+    });
+
+    load(currentPath);
+  }
+
+  // ============================================================
+  // Training modal — fine-tuning LoRA
+  // ============================================================
+  let trainingPollTimer = null;
+
+  async function openTrainingModal() {
+    let st;
+    try {
+      st = await api('/api/training/status');
+    } catch (e) {
+      toast('falha carregando training: ' + e.message, 'error');
+      return;
+    }
+    const m = openModal(`
+      <h2>🎓 Modo Treinamento — Fine-tuning LoRA <button class="close">×</button></h2>
+
+      <div id="tr-mlx-warn" style="display:none;background:rgba(228,199,110,.1);border:1px solid var(--yellow);border-radius:6px;padding:10px 12px;margin-bottom:14px;font-size:12.5px;">
+        ⚠ <strong>mlx-lm não está instalado.</strong> Rode no terminal:
+        <code style="display:block;margin-top:6px;background:var(--bg);padding:6px 8px;border-radius:4px;">pip install mlx-lm</code>
+      </div>
+
+      <div style="font-size:12px;color:var(--text-mute);margin-bottom:14px;line-height:1.6;">
+        Treina um <strong>adapter LoRA</strong> em cima do modelo base. Roda 100% local
+        no seu Mac via Apple Silicon (Neural Engine). O resultado vira um perfil novo
+        que você seleciona no topo da UI. Veja <strong>Ajuda → Como treinar em português</strong>
+        pra entender o pipeline completo.
+      </div>
+
+      <div class="modal-tabs">
+        <button class="modal-tab active" data-mtab="datasets">📂 Datasets</button>
+        <button class="modal-tab" data-mtab="train">▶ Treinar</button>
+        <button class="modal-tab" data-mtab="adapters">🧩 Adapters</button>
+        <button class="modal-tab" data-mtab="logs">📜 Logs</button>
+      </div>
+
+      <!-- DATASETS -->
+      <div class="modal-pane active" id="mp-datasets">
+        <div style="font-size:12px;color:var(--text-mute);margin-bottom:8px;">
+          Suba arquivos <code>.jsonl</code> com seus exemplos. Formato esperado:
+          <code>{"conversations":[{"from":"human","value":"..."},{"from":"gpt","value":"..."}]}</code>
+          ou <code>{"prompt":"...","completion":"..."}</code>.
+          Salvos em <code id="tr-raw-dir"></code>.
+        </div>
+        <div id="tr-drop" style="border:2px dashed var(--border-2);border-radius:8px;padding:24px;text-align:center;cursor:pointer;background:var(--bg-elev-2);transition:all .15s;">
+          <div style="font-size:24px;margin-bottom:6px;">📎</div>
+          <div style="font-size:13px;color:var(--text);">Arraste arquivos aqui ou clique para selecionar</div>
+          <div style="font-size:11px;color:var(--text-mute);margin-top:4px;">.jsonl, .json, .txt, .md (até 200MB)</div>
+          <input type="file" id="tr-file-input" multiple accept=".jsonl,.json,.txt,.md" style="display:none;" />
+        </div>
+        <div id="tr-datasets-list" style="margin-top:14px;"></div>
+        <div style="margin-top:14px;padding:10px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-elev-2);">
+          <div style="font-size:12px;color:var(--text);margin-bottom:6px;"><strong>Não tem train.jsonl ainda?</strong></div>
+          <div style="font-size:11px;color:var(--text-mute);margin-bottom:8px;line-height:1.5;">
+            Se você subiu raw files (Pirá, wiki, QA, ou texto puro), clique abaixo
+            pra gerar <code>formatted/train.jsonl</code> e <code>valid.jsonl</code>
+            automaticamente. Aceita ShareGPT, <code>{question, answer}</code> ou <code>{text, title}</code>.
+          </div>
+          <button class="btn" id="tr-format-btn">⚙ Formatar agora (raw → train.jsonl)</button>
+          <div id="tr-format-out" style="margin-top:8px;font-size:11px;font-family:var(--mono);color:var(--text-dim);"></div>
+        </div>
+      </div>
+
+      <!-- TRAIN -->
+      <div class="modal-pane" id="mp-train">
+        <label>Modelo base (Hugging Face)</label>
+        <select id="tr-model">
+          <option value="Qwen/Qwen2.5-14B-Instruct">Qwen 2.5 14B Instruct (recomendado)</option>
+          <option value="Qwen/Qwen2.5-7B-Instruct">Qwen 2.5 7B Instruct (rápido)</option>
+          <option value="Qwen/Qwen2.5-Coder-14B-Instruct">Qwen 2.5 Coder 14B (código)</option>
+          <option value="meta-llama/Llama-3.2-3B-Instruct">Llama 3.2 3B (leve)</option>
+        </select>
+        <div class="row">
+          <div>
+            <label style="text-transform:none;font-size:12px;">Iterações</label>
+            <input id="tr-iters" type="number" value="500" min="10" step="10" />
+          </div>
+          <div>
+            <label style="text-transform:none;font-size:12px;">Batch size</label>
+            <input id="tr-batch" type="number" value="2" min="1" max="16" />
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label style="text-transform:none;font-size:12px;">LoRA layers</label>
+            <input id="tr-layers" type="number" value="16" min="1" max="64" />
+          </div>
+          <div>
+            <label style="text-transform:none;font-size:12px;">Learning rate</label>
+            <input id="tr-lr" type="number" value="0.00001" step="0.000001" />
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text-mute);margin-top:10px;line-height:1.5;">
+          ⏱ Estimativa: ~30min com 500 iters em M3/M4. Ajuste pra cima se o loss ainda estiver caindo.
+          O processo roda em background — você pode fechar a modal e voltar depois.
+        </div>
+        <div id="tr-job-status" style="margin-top:14px;padding:10px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-elev-2);font-size:12px;font-family:var(--mono);"></div>
+        <div class="actions">
+          <button class="btn danger" id="tr-stop" style="display:none;">⏹ Parar</button>
+          <button class="btn primary" id="tr-start">▶ Iniciar treinamento</button>
+        </div>
+      </div>
+
+      <!-- ADAPTERS -->
+      <div class="modal-pane" id="mp-adapters">
+        <div style="font-size:12px;color:var(--text-mute);margin-bottom:10px;">
+          Adapters LoRA já treinados em <code id="tr-adapter-dir"></code>.
+          Próximo passo após treinar: exportar pro Ollama com
+          <code>python -m mtzcode.finetune.export_ollama</code>.
+        </div>
+        <div id="tr-adapters-list"></div>
+      </div>
+
+      <!-- LOGS -->
+      <div class="modal-pane" id="mp-logs">
+        <div style="font-size:12px;color:var(--text-mute);margin-bottom:8px;">
+          Saída do <code>mlx_lm.lora</code> em tempo real (atualiza a cada 2s).
+        </div>
+        <pre id="tr-logs" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;font-family:var(--mono);font-size:11px;max-height:340px;overflow:auto;white-space:pre-wrap;color:var(--text-dim);">(sem logs ainda — inicie um treinamento)</pre>
+      </div>
+    `);
+
+    // tab switcher
+    m.querySelectorAll('.modal-tab').forEach(t => {
+      t.addEventListener('click', () => {
+        m.querySelectorAll('.modal-tab').forEach(x => x.classList.remove('active'));
+        m.querySelectorAll('.modal-pane').forEach(x => x.classList.remove('active'));
+        t.classList.add('active');
+        m.querySelector('#mp-' + t.dataset.mtab).classList.add('active');
+        if (t.dataset.mtab === 'logs') refreshLogs();
+        if (t.dataset.mtab === 'adapters') refreshAdapters();
+        if (t.dataset.mtab === 'datasets') refreshDatasets();
+      });
+    });
+
+    function applyStatus(s) {
+      m.querySelector('#tr-mlx-warn').style.display = s.mlx_installed ? 'none' : '';
+      m.querySelector('#tr-raw-dir').textContent = (s.dirs && s.dirs.raw) || '';
+      m.querySelector('#tr-adapter-dir').textContent = (s.dirs && s.dirs.adapters) || '';
+      const jb = m.querySelector('#tr-job-status');
+      if (!s.id) {
+        jb.textContent = 'nenhum job rodado ainda nesta sessão.';
+      } else {
+        jb.innerHTML = `
+          <div><strong>job:</strong> ${escapeHtml(s.id)} — <strong>status:</strong> <span style="color:${statusColor(s.status)}">${escapeHtml(s.status)}</span></div>
+          <div><strong>iniciado:</strong> ${escapeHtml(s.started_at || '—')}</div>
+          ${s.finished_at ? `<div><strong>finalizado:</strong> ${escapeHtml(s.finished_at)}</div>` : ''}
+          ${s.return_code != null ? `<div><strong>exit code:</strong> ${s.return_code}</div>` : ''}
+          ${s.error ? `<div style="color:var(--red);"><strong>erro:</strong> ${escapeHtml(s.error)}</div>` : ''}
+        `;
+      }
+      const running = s.status === 'running';
+      m.querySelector('#tr-start').style.display = running ? 'none' : '';
+      m.querySelector('#tr-stop').style.display = running ? '' : 'none';
+    }
+
+    function statusColor(st) {
+      if (st === 'running') return 'var(--cyan)';
+      if (st === 'done') return 'var(--green)';
+      if (st === 'error') return 'var(--red)';
+      if (st === 'cancelled') return 'var(--yellow)';
+      return 'var(--text-dim)';
+    }
+
+    async function refreshDatasets() {
+      try {
+        const data = await api('/api/training/datasets');
+        const list = m.querySelector('#tr-datasets-list');
+        const items = data.datasets || [];
+        if (!items.length) {
+          list.innerHTML = '<div class="empty-list">nenhum dataset enviado ainda</div>';
+          return;
+        }
+        list.innerHTML = items.map(it => `
+          <div style="display:flex;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;background:var(--bg-elev-2);">
+            <div style="flex:1;min-width:0;">
+              <div style="font-weight:600;font-family:var(--mono);font-size:12.5px;">${escapeHtml(it.name)}</div>
+              <div style="font-size:11px;color:var(--text-mute);">
+                ${(it.size/1024).toFixed(1)} KB
+                ${it.lines != null ? '· ' + it.lines + ' linhas' : ''}
+                · ${escapeHtml(it.modified)}
+              </div>
+            </div>
+            <button class="btn small danger" data-del="${escapeHtml(it.name)}">apagar</button>
+          </div>
+        `).join('');
+        list.querySelectorAll('[data-del]').forEach(b => {
+          b.addEventListener('click', async () => {
+            if (!confirm('Apagar ' + b.dataset.del + '?')) return;
+            try {
+              await api('/api/training/datasets/' + encodeURIComponent(b.dataset.del), { method: 'DELETE' });
+              toast('apagado', 'success');
+              refreshDatasets();
+            } catch (e) { toast('falha: ' + e.message, 'error'); }
+          });
+        });
+      } catch (e) {
+        toast('falha carregando datasets: ' + e.message, 'error');
+      }
+    }
+
+    async function refreshAdapters() {
+      try {
+        const data = await api('/api/training/adapters');
+        const list = m.querySelector('#tr-adapters-list');
+        const items = data.adapters || [];
+        if (!items.length) {
+          list.innerHTML = '<div class="empty-list">nenhum adapter treinado ainda</div>';
+          return;
+        }
+        list.innerHTML = items.map(it => `
+          <div style="padding:10px 12px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;background:var(--bg-elev-2);">
+            <div style="font-weight:600;font-family:var(--mono);font-size:12.5px;">🧩 ${escapeHtml(it.name)}</div>
+            <div style="font-size:11px;color:var(--text-mute);margin-top:3px;">${escapeHtml(it.path)}</div>
+            <div style="font-size:11px;color:var(--text-mute);">treinado em ${escapeHtml(it.modified)}</div>
+          </div>
+        `).join('');
+      } catch (e) {
+        toast('falha carregando adapters: ' + e.message, 'error');
+      }
+    }
+
+    async function refreshLogs() {
+      try {
+        const data = await api('/api/training/logs?lines=300');
+        const pre = m.querySelector('#tr-logs');
+        pre.textContent = data.log || '(sem logs ainda)';
+        pre.scrollTop = pre.scrollHeight;
+        if (data.job) applyStatus({ ...st, ...data.job });
+      } catch (e) { /* silencioso */ }
+    }
+
+    async function refreshStatus() {
+      try {
+        const s = await api('/api/training/status');
+        Object.assign(st, s);
+        applyStatus(s);
+      } catch (e) { /* silencioso */ }
+    }
+
+    // upload handlers
+    const drop = m.querySelector('#tr-drop');
+    const fileInput = m.querySelector('#tr-file-input');
+    drop.addEventListener('click', () => fileInput.click());
+    drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.style.borderColor = 'var(--accent)'; });
+    drop.addEventListener('dragleave', () => { drop.style.borderColor = ''; });
+    drop.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      drop.style.borderColor = '';
+      await uploadFiles(e.dataTransfer.files);
+    });
+    fileInput.addEventListener('change', () => uploadFiles(fileInput.files));
+
+    async function uploadFiles(files) {
+      for (const f of files) {
+        const fd = new FormData();
+        fd.append('file', f);
+        try {
+          const res = await fetch('/api/training/upload', { method: 'POST', body: fd });
+          if (!res.ok) {
+            const j = await res.json().catch(() => ({}));
+            throw new Error(j.detail || res.status);
+          }
+          toast('enviado: ' + f.name, 'success');
+        } catch (e) {
+          toast('falha enviando ' + f.name + ': ' + e.message, 'error');
+        }
+      }
+      refreshDatasets();
+    }
+
+    // formatar raw → train.jsonl
+    m.querySelector('#tr-format-btn').addEventListener('click', async () => {
+      const out = m.querySelector('#tr-format-out');
+      const btn = m.querySelector('#tr-format-btn');
+      btn.disabled = true;
+      out.textContent = 'formatando...';
+      try {
+        const res = await api('/api/training/format', { method: 'POST' });
+        const lines = [`✓ train: ${res.train} exemplos`, `✓ valid: ${res.valid} exemplos`];
+        if (res.per_file) {
+          for (const [k, v] of Object.entries(res.per_file)) lines.push(`  ${k}: ${v}`);
+        }
+        out.textContent = lines.join('\n');
+        toast('dataset formatado — pronto pra treinar', 'success');
+      } catch (e) {
+        out.textContent = 'erro: ' + e.message;
+        toast('falha ao formatar: ' + e.message, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // start/stop
+    m.querySelector('#tr-start').addEventListener('click', async () => {
+      const payload = {
+        model: m.querySelector('#tr-model').value,
+        iters: parseInt(m.querySelector('#tr-iters').value) || 500,
+        batch_size: parseInt(m.querySelector('#tr-batch').value) || 2,
+        lora_layers: parseInt(m.querySelector('#tr-layers').value) || 16,
+        learning_rate: parseFloat(m.querySelector('#tr-lr').value) || 1e-5,
+      };
+      try {
+        await api('/api/training/start', { method: 'POST', body: JSON.stringify(payload) });
+        toast('treinamento iniciado', 'success');
+        refreshStatus();
+        // pula pra aba logs
+        m.querySelector('[data-mtab="logs"]').click();
+      } catch (e) {
+        toast('falha: ' + e.message, 'error');
+      }
+    });
+    m.querySelector('#tr-stop').addEventListener('click', async () => {
+      if (!confirm('Parar o treinamento atual? O progresso até agora é mantido.')) return;
+      try {
+        await api('/api/training/stop', { method: 'POST' });
+        toast('treinamento parado', 'warn');
+        refreshStatus();
+      } catch (e) { toast('falha: ' + e.message, 'error'); }
+    });
+
+    // initial load
+    applyStatus(st);
+    refreshDatasets();
+
+    // poll status + logs every 2s while modal is open
+    if (trainingPollTimer) clearInterval(trainingPollTimer);
+    trainingPollTimer = setInterval(() => {
+      if (!document.querySelector('.modal-overlay')) {
+        clearInterval(trainingPollTimer);
+        trainingPollTimer = null;
+        return;
+      }
+      refreshStatus();
+      const logsTab = m.querySelector('#mp-logs');
+      if (logsTab && logsTab.classList.contains('active')) refreshLogs();
+    }, 2000);
+  }
+
+  // ============================================================
+  // Settings modal
+  // ============================================================
+  async function openSettingsModal() {
+    let settings;
+    try {
+      settings = await api('/api/settings');
+    } catch (e) {
+      toast('falha carregando settings: ' + e.message, 'error');
+      return;
+    }
+    const ak = settings.api_keys || {};
+    const mo = settings.model_options || {};
+    const m = openModal(`
+      <h2>⚙ Configurações <button class="close">×</button></h2>
+
+      <div style="font-size:11px;color:var(--text-mute);margin-bottom:12px;">
+        Salvo em <code>~/.mtzcode/settings.json</code>. As mudanças entram em vigor na próxima mensagem.
+      </div>
+
+      <label>Pasta de dados</label>
+      <input id="st-data" type="text" value="${escapeHtml(settings.data_folder || '')}" />
+
+      <label>Python pra treinamento (mlx-lm) <span style="text-transform:none;font-weight:400;opacity:.6;">— vazio = auto-detect</span></label>
+      <input id="st-trainpy" type="text" placeholder="ex: /Users/voce/radioconda/bin/python" value="${escapeHtml(settings.training_python || '')}" />
+
+      <label style="margin-top:18px;">🔑 API Keys (perfis cloud)</label>
+      <div style="font-size:11px;color:var(--text-mute);margin-bottom:6px;">
+        Cole a chave — fica salva localmente e vira variável de ambiente.
+      </div>
+      <label style="text-transform:none;font-size:12px;margin-top:8px;">GROQ_API_KEY</label>
+      <input id="st-groq" type="password" placeholder="${ak.GROQ_API_KEY === '***' ? '(definida)' : 'gsk_...'}" value="${ak.GROQ_API_KEY === '***' ? '***' : ''}" />
+      <label style="text-transform:none;font-size:12px;margin-top:8px;">MARITACA_API_KEY</label>
+      <input id="st-maritaca" type="password" placeholder="${ak.MARITACA_API_KEY === '***' ? '(definida)' : '...'}" value="${ak.MARITACA_API_KEY === '***' ? '***' : ''}" />
+      <label style="text-transform:none;font-size:12px;margin-top:8px;">APIFY_API_KEY <span style="opacity:.6;font-weight:400;">— scraping/automação (apify.com)</span></label>
+      <input id="st-apify" type="password" placeholder="${ak.APIFY_API_KEY === '***' ? '(definida)' : 'apify_api_...'}" value="${ak.APIFY_API_KEY === '***' ? '***' : ''}" />
+
+      <label style="margin-top:18px;">⚙ Opções do modelo (Ollama)</label>
+      <div class="row">
+        <div>
+          <label style="text-transform:none;font-size:12px;">Temperatura</label>
+          <input id="st-temp" type="number" step="0.1" min="0" max="2" value="${mo.temperature ?? 0.3}" />
+        </div>
+        <div>
+          <label style="text-transform:none;font-size:12px;">top_p</label>
+          <input id="st-topp" type="number" step="0.05" min="0" max="1" value="${mo.top_p ?? 0.9}" />
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label style="text-transform:none;font-size:12px;">num_ctx (janela)</label>
+          <input id="st-ctx" type="number" step="1024" min="1024" value="${mo.num_ctx ?? 16384}" />
+        </div>
+        <div>
+          <label style="text-transform:none;font-size:12px;">num_predict (max tokens)</label>
+          <input id="st-pred" type="number" step="256" min="128" value="${mo.num_predict ?? 2048}" />
+        </div>
+      </div>
+      <label style="text-transform:none;font-size:12px;">keep_alive (ex: 30m, 1h)</label>
+      <input id="st-keep" type="text" value="${escapeHtml(mo.keep_alive ?? '30m')}" />
+
+      <label style="margin-top:18px;">📝 Contexto pessoal</label>
+      <div style="font-size:11px;color:var(--text-mute);margin-bottom:6px;">
+        Texto livre concatenado ao system prompt — quem você é, sua empresa, preferências de estilo, convenções do projeto.
+      </div>
+      <textarea id="st-ctxpersonal" rows="6" placeholder="Ex: Sou Jean Mortaza, dev fullstack. Use Python 3.11+, type hints sempre. Prefiro código direto sem comentários óbvios. Em PT-BR.">${escapeHtml(settings.personal_context || '')}</textarea>
+
+      <div class="actions">
+        <button class="btn" id="st-cancel">Cancelar</button>
+        <button class="btn primary" id="st-save">Salvar</button>
+      </div>
+    `);
+    m.querySelector('#st-cancel').addEventListener('click', closeModal);
+    m.querySelector('#st-save').addEventListener('click', async () => {
+      const payload = {
+        data_folder: m.querySelector('#st-data').value.trim(),
+        training_python: m.querySelector('#st-trainpy').value.trim(),
+        api_keys: {
+          GROQ_API_KEY: m.querySelector('#st-groq').value,
+          MARITACA_API_KEY: m.querySelector('#st-maritaca').value,
+          APIFY_API_KEY: m.querySelector('#st-apify').value,
+        },
+        model_options: {
+          temperature: parseFloat(m.querySelector('#st-temp').value) || 0.3,
+          top_p: parseFloat(m.querySelector('#st-topp').value) || 0.9,
+          num_ctx: parseInt(m.querySelector('#st-ctx').value) || 16384,
+          num_predict: parseInt(m.querySelector('#st-pred').value) || 2048,
+          keep_alive: m.querySelector('#st-keep').value.trim() || '30m',
+        },
+        personal_context: m.querySelector('#st-ctxpersonal').value,
+      };
+      try {
+        await api('/api/settings', { method: 'POST', body: JSON.stringify(payload) });
+        toast('configurações salvas', 'success');
+        closeModal();
+      } catch (e) {
+        toast('falha salvando: ' + e.message, 'error');
+      }
+    });
+  }
+
+  // ============================================================
+  // Help modal
+  // ============================================================
+  async function openHelpModal() {
+    let data;
+    try {
+      data = await api('/api/help');
+    } catch (e) {
+      toast('falha carregando ajuda: ' + e.message, 'error');
+      return;
+    }
+    const sections = (data.sections || []).map(s => `
+      <div class="help-section">
+        <h3>${escapeHtml(s.title)}</h3>
+        <div class="body">${marked.parse(s.body || '')}</div>
+      </div>
+    `).join('');
+    openModal(`
+      <h2>? Ajuda — mtzCode <button class="close">×</button></h2>
+      ${sections}
+    `);
+  }
+
+  // ============================================================
+  // Voz → Texto (Web Speech API)
+  // ============================================================
+  let recognition = null;
+  let recognizing = false;
+  function setupVoice() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      $('mic-btn').style.opacity = '0.4';
+      $('mic-btn').title = 'Ditado por voz não suportado neste navegador (use Chrome/Safari)';
+      return;
+    }
+    recognition = new SR();
+    recognition.lang = 'pt-BR';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    let baseText = '';
+    recognition.onstart = () => {
+      recognizing = true;
+      $('mic-btn').classList.add('recording');
+      $('mic-btn').textContent = '⏺';
+      baseText = $('input').value;
+      if (baseText && !baseText.endsWith(' ')) baseText += ' ';
+      setStatus('ouvindo... fale agora');
+    };
+    recognition.onresult = (ev) => {
+      let interim = '';
+      let final = '';
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const r = ev.results[i];
+        if (r.isFinal) final += r[0].transcript;
+        else interim += r[0].transcript;
+      }
+      if (final) {
+        baseText += final + ' ';
+        $('input').value = baseText;
+      } else {
+        $('input').value = baseText + interim;
+      }
+    };
+    recognition.onerror = (ev) => {
+      toast('erro de microfone: ' + ev.error, 'error');
+      stopVoice();
+    };
+    recognition.onend = () => {
+      recognizing = false;
+      $('mic-btn').classList.remove('recording');
+      $('mic-btn').textContent = '🎤';
+      setStatus('pronto');
+    };
+  }
+  function toggleVoice() {
+    if (!recognition) { setupVoice(); }
+    if (!recognition) return;
+    if (recognizing) stopVoice();
+    else { try { recognition.start(); } catch (e) {} }
+  }
+  function stopVoice() {
+    try { recognition && recognition.stop(); } catch (e) {}
+  }
+
+  // ============================================================
+  // Chat: render
+  // ============================================================
+  function setStatus(text, isError=false) {
+    const el = $('status-line');
+    el.textContent = text;
+    el.className = isError ? 'error' : '';
+  }
+
+  function scrollBottom() {
+    const main = $('main');
+    main.scrollTop = main.scrollHeight;
+  }
+
+  function hideEmpty() {
+    const empty = $('empty');
+    if (empty) empty.style.display = 'none';
+  }
+
+  function addMessage(role) {
+    hideEmpty();
+    const msg = document.createElement('div');
+    msg.className = `msg ${role}`;
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    avatar.textContent = role === 'user' ? 'JM' : 'mtz';
+    const content = document.createElement('div');
+    content.className = 'content';
+    const roleEl = document.createElement('div');
+    roleEl.className = 'role';
+    roleEl.textContent = role === 'user' ? 'você' : 'mtzcode';
+    const body = document.createElement('div');
+    body.className = 'body';
+    content.appendChild(roleEl);
+    content.appendChild(body);
+    msg.appendChild(avatar);
+    msg.appendChild(content);
+    $('chat').appendChild(msg);
+    scrollBottom();
+    return { msg, body };
+  }
+
+  function renderMarkdown(el, text) {
+    el.innerHTML = marked.parse(text);
+    el.querySelectorAll('pre code').forEach((block) => {
+      try { hljs.highlightElement(block); } catch (e) {}
+    });
+  }
+
+  function addToolCall(name, args) {
+    const tool = document.createElement('div');
+    tool.className = 'tool';
+    const head = document.createElement('div');
+    head.className = 'head';
+    const argsPreview = formatArgs(args);
+    head.innerHTML = `
+      <span>→</span>
+      <span class="name">${escapeHtml(name)}</span>
+      <span class="args">${escapeHtml(argsPreview)}</span>
+      <span class="chevron">▶</span>
+    `;
+    const result = document.createElement('div');
+    result.className = 'result';
+    result.textContent = 'executando...';
+    tool.appendChild(head);
+    tool.appendChild(result);
+    head.addEventListener('click', () => tool.classList.toggle('open'));
+    return { tool, result, head };
+  }
+
+  function formatArgs(args) {
+    if (!args || Object.keys(args).length === 0) return '()';
+    const parts = Object.entries(args).map(([k, v]) => {
+      let s = JSON.stringify(v);
+      if (s && s.length > 60) s = s.slice(0, 57) + '...';
+      return `${k}=${s}`;
+    });
+    return '(' + parts.join(', ') + ')';
+  }
+
+  // ============================================================
+  // Chat: send / stream
+  // ============================================================
+  // ============================================================
+  // Anexos — arquivos que viram contexto da próxima mensagem
+  // ============================================================
+  function renderAttachments() {
+    const bar = $('attach-bar');
+    const list = $('attach-list');
+    const count = $('attach-count');
+    if (!state.attachments.length) {
+      bar.style.display = 'none';
+      return;
+    }
+    bar.style.display = '';
+    count.textContent = state.attachments.length;
+    list.innerHTML = '';
+    state.attachments.forEach((a, i) => {
+      const chip = document.createElement('div');
+      chip.style.cssText = 'display:flex;align-items:center;gap:6px;background:var(--bg-elev-2);border:1px solid var(--border);border-radius:14px;padding:4px 8px 4px 10px;max-width:280px;';
+      const icon = document.createElement('span');
+      icon.textContent = '📎';
+      icon.style.cssText = 'font-size:11px;';
+      const txt = document.createElement('span');
+      txt.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--text);';
+      txt.textContent = `${a.name} (${(a.size / 1024).toFixed(1)} KB)`;
+      txt.title = a.path;
+      const x = document.createElement('button');
+      x.textContent = '×';
+      x.style.cssText = 'background:none;border:none;color:var(--text-mute);cursor:pointer;font-size:14px;line-height:1;padding:0 2px;';
+      x.title = 'remover anexo';
+      x.addEventListener('click', () => {
+        state.attachments.splice(i, 1);
+        renderAttachments();
+      });
+      chip.appendChild(icon);
+      chip.appendChild(txt);
+      chip.appendChild(x);
+      list.appendChild(chip);
+    });
+  }
+
+  async function uploadAttachment(file) {
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const res = await fetch('/api/chat/attach', { method: 'POST', body: fd });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.detail || res.status);
+      }
+      const data = await res.json();
+      state.attachments.push({ name: data.name, path: data.path, size: data.size });
+      renderAttachments();
+      toast(`anexado: ${data.name}`, 'success');
+    } catch (e) {
+      toast('falha anexando ' + file.name + ': ' + e.message, 'error');
+    }
+  }
+
+  async function uploadAttachments(files) {
+    for (const f of files) await uploadAttachment(f);
+  }
+
+  // ============================================================
+  // Fila de execução — enfileira mensagens enquanto uma roda
+  // ============================================================
+  function renderQueue() {
+    const bar = $('queue-bar');
+    const list = $('queue-list');
+    const count = $('queue-count');
+    if (!state.queue.length) {
+      bar.style.display = 'none';
+      return;
+    }
+    bar.style.display = '';
+    count.textContent = state.queue.length;
+    // DocumentFragment evita reflow por chip (50 chips ≈ 1 reflow só)
+    const frag = document.createDocumentFragment();
+    state.queue.forEach((msg, i) => {
+      const chip = document.createElement('div');
+      chip.style.cssText = 'display:flex;align-items:center;gap:6px;background:var(--bg-elev-2);border:1px solid var(--border);border-radius:14px;padding:4px 8px 4px 10px;max-width:280px;';
+      const txt = document.createElement('span');
+      txt.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--text);';
+      txt.textContent = `${i + 1}. ${msg}`;
+      txt.title = msg;
+      const x = document.createElement('button');
+      x.textContent = '×';
+      x.style.cssText = 'background:none;border:none;color:var(--text-mute);cursor:pointer;font-size:14px;line-height:1;padding:0 2px;';
+      x.title = 'remover da fila';
+      x.addEventListener('click', () => {
+        state.queue.splice(i, 1);
+        renderQueue();
+      });
+      chip.appendChild(txt);
+      chip.appendChild(x);
+      frag.appendChild(chip);
+    });
+    list.innerHTML = '';
+    list.appendChild(frag);
+  }
+
+  function enqueueMessage(message) {
+    state.queue.push(message);
+    renderQueue();
+    toast(`adicionado à fila (${state.queue.length})`, 'success');
+  }
+
+  async function sendMessage() {
+    const input = $('input');
+    const rawText = input.value.trim();
+    if (!rawText && !state.attachments.length) return;
+    // Monta mensagem final com prefixo de anexos (se houver)
+    let message = rawText;
+    if (state.attachments.length) {
+      const lines = state.attachments.map(a => `- ${a.path}`).join('\n');
+      const header = state.attachments.length === 1
+        ? `[Anexo do usuário — use a tool read pra acessar:]\n${lines}\n\n`
+        : `[Anexos do usuário (${state.attachments.length}) — use a tool read pra acessar cada um:]\n${lines}\n\n`;
+      message = header + (rawText || '(sem texto — analise o(s) anexo(s))');
+    }
+    // Se já tem algo rodando, enfileira em vez de bloquear
+    if (state.busy) {
+      input.value = '';
+      enqueueMessage(message);
+      state.attachments = [];
+      renderAttachments();
+      return;
+    }
+    state.busy = true;
+    // NÃO desabilitamos o botão — usuário precisa poder enfileirar
+    // mensagens enquanto a anterior roda. O check `if (state.busy)`
+    // acima já redireciona a próxima chamada pra enqueueMessage.
+    input.value = '';
+    const sentAttachments = state.attachments.slice();
+    state.attachments = [];
+    renderAttachments();
+
+    const userMsg = addMessage('user');
+    if (sentAttachments.length) {
+      const chips = sentAttachments.map(a => `<span style="display:inline-block;background:var(--bg-elev-2);border:1px solid var(--border);border-radius:10px;padding:1px 8px;margin:2px 4px 2px 0;font-size:11px;">📎 ${escapeHtml(a.name)}</span>`).join('');
+      userMsg.body.innerHTML = chips + (rawText ? '<br>' + escapeHtml(rawText) : '');
+    } else {
+      userMsg.body.textContent = rawText;
+    }
+    const assistant = addMessage('assistant');
+    let streamedText = '';
+    let currentTool = null;
+    setStatus('pensando...');
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
+      });
+      if (!res.ok || !res.body) {
+        assistant.body.textContent = 'erro: ' + res.status;
+        return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.slice(6);
+          let ev;
+          try { ev = JSON.parse(payload); } catch(e) { continue; }
+          handleEvent(ev, assistant.body, (t) => currentTool = t);
+          scrollBottom();
+        }
+      }
+    } catch (e) {
+      assistant.body.textContent = 'erro: ' + e.message;
+      setStatus('erro', true);
+    } finally {
+      state.busy = false;
+      $('send-btn').disabled = false;  // garantia (caso versão antiga do estado tenha desabilitado)
+      setStatus('pronto');
+      input.focus();
+      // recarrega sessions, pois pode ter criado uma nova
+      loadSessions();
+      loadTodos();
+      // drena a fila — pega próximo e dispara
+      if (state.queue.length) {
+        const next = state.queue.shift();
+        renderQueue();
+        $('input').value = next;
+        // setTimeout pra deixar o DOM respirar entre mensagens
+        setTimeout(() => sendMessage(), 50);
+      }
+    }
+
+    function handleEvent(ev, body, setCurrent) {
+      const { kind, data } = ev;
+      if (kind === 'text_delta') {
+        streamedText += data.delta;
+        renderMarkdown(body, streamedText);
+      } else if (kind === 'text_clear' || kind === 'text_suppress_start') {
+        // O backend percebeu que o texto streamado era na verdade JSON de
+        // tool call mascarada. Apaga da UI pra não mostrar lixo.
+        streamedText = '';
+        body.innerHTML = '';  // limpa visual ANTES de qualquer próximo delta
+        renderMarkdown(body, '');
+      } else if (kind === 'tool_call') {
+        const { tool, result } = addToolCall(data.name, data.args);
+        body.appendChild(tool);
+        setCurrent({ tool, result });
+        scrollBottom();
+      } else if (kind === 'tool_result') {
+        const t = currentToolFor(data.name, body);
+        if (t) {
+          t.result.textContent = data.result;
+          t.tool.classList.add('has-result');
+        }
+      } else if (kind === 'tool_error') {
+        const t = currentToolFor(data.name, body);
+        if (t) {
+          t.result.textContent = 'ERRO: ' + data.error;
+          t.tool.classList.add('error');
+        }
+      } else if (kind === 'done') {
+        if (data.text && !streamedText) renderMarkdown(body, data.text);
+      } else if (kind === 'error') {
+        body.insertAdjacentHTML('beforeend',
+          `<div class="status-line error">erro: ${escapeHtml(data.message)}</div>`);
+      }
+    }
+
+    function currentToolFor(name, body) {
+      const tools = body.querySelectorAll('.tool:not(.has-result):not(.error)');
+      for (let i = tools.length - 1; i >= 0; i--) {
+        if (tools[i].querySelector('.name').textContent === name) {
+          return { tool: tools[i], result: tools[i].querySelector('.result') };
+        }
+      }
+      return null;
+    }
+  }
+
+  // ============================================================
+  // Export / Reset
+  // ============================================================
+  function exportChat() {
+    const msgs = $$('.msg');
+    if (!msgs.length) { toast('nada pra exportar', 'warn'); return; }
+    let out = '# mtzCode — conversa exportada\n\n';
+    msgs.forEach(m => {
+      const role = m.classList.contains('user') ? 'Você' : 'mtzcode';
+      const body = m.querySelector('.body');
+      out += `## ${role}\n\n${body.innerText.trim()}\n\n---\n\n`;
+    });
+    const blob = new Blob([out], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mtzcode-${Date.now()}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('conversa exportada', 'success');
+  }
+
+  async function resetChat() {
+    await api('/api/reset', { method: 'POST' });
+    const chat = $('chat');
+    chat.innerHTML = '';
+    const empty = document.createElement('div');
+    empty.id = 'empty';
+    empty.className = 'empty';
+    empty.innerHTML = `
+      <h1>mtzCode</h1>
+      <p>Histórico limpo.</p>
+    `;
+    chat.appendChild(empty);
+    setStatus('histórico limpo');
+  }
+
+  // ============================================================
+  // Wire-up
+  // ============================================================
+  function wire() {
+    // sidebar / panel toggles
+    $('toggle-left').addEventListener('click', () => {
+      $('app').classList.toggle('collapse-left');
+      $('app').classList.toggle('show-left');
+    });
+    $('toggle-right').addEventListener('click', () => {
+      $('app').classList.toggle('collapse-right');
+      $('app').classList.toggle('show-right');
+    });
+
+    // new chat
+    $('new-chat-btn').addEventListener('click', newSession);
+
+    // folders
+    $('add-folder-btn').addEventListener('click', openAddFolderModal);
+
+    // panel tabs
+    $$('.panel-tab').forEach(t => {
+      t.addEventListener('click', () => {
+        $$('.panel-tab').forEach(x => x.classList.remove('active'));
+        $$('.tab-pane').forEach(x => x.classList.remove('active'));
+        t.classList.add('active');
+        $('tab-' + t.dataset.tab).classList.add('active');
+        if (t.dataset.tab === 'todos') loadTodos();
+      });
+    });
+
+    // todos
+    $('todos-refresh-btn').addEventListener('click', loadTodos);
+    $('todos-clear-btn').addEventListener('click', async () => {
+      if (!confirm('Limpar TODAS as tarefas?')) return;
+      try {
+        await api('/api/todos', { method: 'DELETE' });
+        loadTodos();
+        toast('tarefas limpas', 'warn');
+      } catch (e) { toast('falha: ' + e.message, 'error'); }
+    });
+
+    // skills / schedules
+    $('install-skill-btn').addEventListener('click', openInstallSkillModal);
+    $('add-schedule-btn').addEventListener('click', openAddScheduleModal);
+
+    // chat header
+    $('profile-chip').addEventListener('click', openProfileModal);
+    $('cwd-chip').addEventListener('click', openCwdModal);
+    $('auto-toggle').addEventListener('click', toggleAuto);
+    $('train-btn').addEventListener('click', openTrainingModal);
+    $('settings-btn').addEventListener('click', openSettingsModal);
+    $('help-btn').addEventListener('click', openHelpModal);
+    $('export-btn').addEventListener('click', exportChat);
+    $('reset-btn').addEventListener('click', resetChat);
+    $('mic-btn').addEventListener('click', toggleVoice);
+
+    // hint cards
+    $$('.hint-card').forEach(card => {
+      card.addEventListener('click', () => {
+        $('input').value = card.dataset.prompt;
+        $('input').focus();
+      });
+    });
+
+    // anexos — botão + input file
+    $('attach-btn').addEventListener('click', () => $('attach-input').click());
+    $('attach-input').addEventListener('change', (e) => {
+      if (e.target.files && e.target.files.length) uploadAttachments(e.target.files);
+      e.target.value = '';
+    });
+    // drag & drop em qualquer lugar do app
+    const appEl = document.body;
+    let dragCounter = 0;
+    appEl.addEventListener('dragenter', (e) => {
+      if (!e.dataTransfer || !e.dataTransfer.types.includes('Files')) return;
+      e.preventDefault();
+      dragCounter++;
+      document.body.style.outline = '3px dashed var(--accent)';
+      document.body.style.outlineOffset = '-6px';
+    });
+    appEl.addEventListener('dragover', (e) => {
+      if (e.dataTransfer && e.dataTransfer.types.includes('Files')) e.preventDefault();
+    });
+    appEl.addEventListener('dragleave', () => {
+      dragCounter--;
+      if (dragCounter <= 0) {
+        dragCounter = 0;
+        document.body.style.outline = '';
+        document.body.style.outlineOffset = '';
+      }
+    });
+    appEl.addEventListener('drop', (e) => {
+      if (!e.dataTransfer || !e.dataTransfer.files.length) return;
+      e.preventDefault();
+      dragCounter = 0;
+      document.body.style.outline = '';
+      document.body.style.outlineOffset = '';
+      uploadAttachments(e.dataTransfer.files);
+    });
+
+    // fila
+    $('queue-clear').addEventListener('click', () => {
+      state.queue = [];
+      renderQueue();
+      toast('fila limpa', 'warn');
+    });
+
+    // input
+    $('send-btn').addEventListener('click', sendMessage);
+    $('input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    // atalho global: ⌘/Ctrl + Shift + M ativa/desativa voz
+    document.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'm' || e.key === 'M')) {
+        e.preventDefault();
+        toggleVoice();
+      }
+    });
+  }
+
+  // ============================================================
+  // Boot
+  // ============================================================
+  async function boot() {
+    wire();
+    await loadState();
+    await Promise.all([
+      loadFolders(),
+      loadSessions(),
+      loadSkills(),
+      loadSchedules(),
+      loadTodos(),
+    ]);
+    $('input').focus();
+    // Recarrega sessões/schedules só quando a aba volta a ficar visível —
+    // evita spam de /api/sessions e /api/schedules a cada 30s em aba parada.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        loadSessions();
+        loadSchedules();
+        loadTodos();
+      }
+    });
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>

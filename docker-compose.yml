@@ -1,0 +1,25 @@
+services:
+  mortaza-bot:
+    build: .
+    image: mortaza-ai:latest
+    container_name: mortaza-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${BOT_PORT:-8000}:8000"
+    volumes:
+      - ./workspace:/app/workspace
+      - mtzcode-data:/root/.local/share/mtzcode
+    # Se a Evolution roda em outro container na mesma máquina:
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/whatsapp/health', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  mtzcode-data:

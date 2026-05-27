@@ -1,0 +1,15 @@
+.git
+.gitignore
+.env
+workspace/
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+.mtzcode/
+.claude/
+dist/
+build/
+*.egg-info/

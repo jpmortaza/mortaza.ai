@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Wrapper do mtzcode — usa o venv local e injeta o projeto no PYTHONPATH.
+# Necessário porque o cpython distribuído pelo uv não processa .pth files
+# da mesma forma que o cpython do sistema, então o "uv pip install -e ."
+# não cria um entry-point funcional.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+VENV_PY="$ROOT/.venv/bin/python3"
+
+if [[ ! -x "$VENV_PY" ]]; then
+  echo "erro: venv não encontrado em $ROOT/.venv" >&2
+  echo "rode primeiro: cd $ROOT && uv venv && uv pip install -e ." >&2
+  exit 1
+fi
+
+export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
+exec "$VENV_PY" -m mtzcode "$@"
